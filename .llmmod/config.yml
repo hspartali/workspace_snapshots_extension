@@ -1,0 +1,104 @@
+# llmmod Configuration File
+# This file controls the behavior of the `llmmod` tool.
+
+# ============================================================
+# 🕸️  'crawl' COMMAND SETTINGS
+# ============================================================
+
+# --- Output ---
+
+# The path where the generated prompt file will be saved.
+output_file: .llmmod/01_prompt_full_crawled.txt
+
+# --- Secrets Redaction ---
+
+# A simple list of secret strings or sensitive words to redact.
+# The tool will automatically replace these with placeholders like __REPL_0__, __REPL_1__, etc.
+secrets:
+  - "YOUR_API_KEY"
+  - "Your Name"
+
+# --- Formatting Options ---
+
+# Whether to add line numbers (e.g., "1    | ...") to each line of code.
+add_line_numbers: true
+
+# --- File Inclusion Rules ---
+
+# List of glob patterns for files to explicitly include.
+# If this list is not empty, ONLY files matching these patterns will be included.
+# Example:
+# include:
+#   - "src/**/*.py"
+#   - "tests/**/*.py"
+include: []
+
+# --- File & Directory Exclusion Rules ---
+exclude:
+  # 🔹 Directories to exclude from crawling (put only directory name)
+  dirs:
+    - "node_modules"
+    - "venv"
+    - ".venv"
+    - "target"
+    - "build"
+    - "dist"
+    - "bin"
+    - "out"
+    - ".git"
+    - ".idea"
+    - ".vscode"
+    - "__pycache__"
+    - ".llmmod"
+
+  # 🔹 File extensions to exclude
+  extensions:
+    - ".log"
+    - ".lock"
+    - ".exe"
+    - ".dll"
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".gif"
+    - ".mp3"
+    - ".mp4"
+    - ".avi"
+    - ".mov"
+    - ".zip"
+    - ".rar"
+    - ".7z"
+    - ".bin"
+    - ".pdf"
+    - ".pyc"
+    - ".ico"
+    - ".DS_Store"
+    - ".obj"
+    - ".o"
+    - ".so"
+    - ".class"
+    - ".flutter-plugins"
+    - ".flutter-plugins-dependencies"
+
+  # 🔹 Advanced glob patterns for excluding specific files or types
+  # These are checked against the full relative path.
+  patterns:
+    - "*.g.dart"
+    - "**/generated_*.py"
+    - "*.egg-info/**"
+
+# ============================================================
+# 🛠️  'apply' COMMAND SETTINGS
+# ============================================================
+
+apply_settings:
+  # The search radius (in lines) to look for a code block to replace.
+  search_radius: 100
+
+  # The minimum percentage (0.1 to 1.0) of lines that must match for a
+  # block to be considered found. 0.8 means 80% of the lines must match.
+  match_threshold_percent: 0.8
+
+  # The number of lines to show before and after a match for context
+  # during ambiguous match prompts.
+  context_lines: 3

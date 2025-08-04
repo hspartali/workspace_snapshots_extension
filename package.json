@@ -1,0 +1,103 @@
+{
+  "name": "changelayers",
+  "displayName": "Change Layers",
+  "description": "Manage and diff sequential, uncommitted change sets as layers.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:changeLayersView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "changelayers.snapshot",
+        "title": "Snapshot Staged Changes as New Layer",
+        "icon": "$(add)"
+      },
+      {
+        "command": "changelayers.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "changelayers.showDiff",
+        "title": "Show Layer-on-Layer Diff"
+      },
+      {
+        "command": "changelayers.discard",
+        "title": "Discard Layer",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "changelayers.discardAll",
+        "title": "Discard All Layers",
+        "icon": "$(clear-all)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "change-layers-container",
+          "title": "Change Layers",
+          "icon": "$(layers)"
+        }
+      ]
+    },
+    "views": {
+      "change-layers-container": [
+        {
+          "id": "changeLayersView",
+          "name": "Layers",
+          "icon": "$(layers)",
+          "contextualTitle": "Change Layers"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "changelayers.snapshot",
+          "when": "view == changeLayersView",
+          "group": "navigation"
+        },
+        {
+          "command": "changelayers.discardAll",
+          "when": "view == changeLayersView",
+          "group": "navigation"
+        },
+        {
+          "command": "changelayers.refresh",
+          "when": "view == changeLayersView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "changelayers.discard",
+          "when": "view == changeLayersView && viewItem == layer",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "eslint": "^8.46.0",
+    "typescript": "^5.1.6"
+  }
+}
