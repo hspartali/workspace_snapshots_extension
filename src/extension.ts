@@ -1,17 +1,20 @@
 import * as vscode from 'vscode';
 import { LayerProvider } from './LayerProvider';
-import { Layer } from './Layer';
+import { Layer, LayerFile } from './Layer';
 import { Git } from './Git';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ReadonlyContentProvider } from './ReadonlyContentProvider';
 
 export function activate(context: vscode.ExtensionContext) {
 
     console.log('Congratulations, your extension "changelayers" is now active!');
 
     const git = new Git();
-    const layerProvider = new LayerProvider(context.globalState, git);
+    const layerProvider = new LayerProvider(context, git);
+    const readonlyProvider = new ReadonlyContentProvider(git);
 
+    context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('changelayer-readonly', readonlyProvider));
     vscode.window.registerTreeDataProvider('changeLayersView', layerProvider);
 
     context.subscriptions.push(vscode.commands.registerCommand('changelayers.refresh', () => {
@@ -19,15 +22,14 @@ export function activate(context: vscode.ExtensionContext) {
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('changelayers.snapshot', async () => {
-        const layerName = await vscode.window.showInputBox({ prompt: 'Enter a name for the new layer' });
-        if (layerName) {
-            try {
-                await layerProvider.createLayer(layerName);
-                vscode.window.showInformationMessage(`Layer "${layerName}" created.`);
-                layerProvider.refresh();
-            } catch (error: any) {
-                vscode.window.showErrorMessage(`Failed to create layer: ${error.message}`);
-            }
+        // Generate a layer name from the current date and time.
+        const layerName = new Date().toLocaleString();
+        try {
+            await layerProvider.createLayer(layerName);
+            vscode.window.showInformationMessage(`Layer "${layerName}" created.`);
+            layerProvider.refresh();
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Failed to create layer: ${error.message}`);
         }
     }));
 
@@ -37,15 +39,24 @@ export function activate(context: vscode.ExtensionContext) {
             if (uris) {
                 const { left, right } = uris;
                 const title = `${path.basename(filePath)} (${layer.getPreviousLayerName()} vs ${layer.label})`;
-                await vscode.commands.executeCommand('vscode.diff', left, right, title);
-                // Clean up temp files
-                setTimeout(() => {
-                    fs.unlinkSync(left.fsPath);
-                    fs.unlinkSync(right.fsPath);
-                }, 5000); 
+                // The preserveFocus option keeps the focus on the tree view, making the selection highlight stay prominent.
+                await vscode.commands.executeCommand('vscode.diff', left, right, title, { preserveFocus: true });
             }
         } catch (error: any) {
             vscode.window.showErrorMessage(`Could not show diff: ${error.message}`);
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('changelayers.discardFile', async (file: LayerFile) => {
+        const confirm = await vscode.window.showWarningMessage(
+            `Are you sure you want to revert "${file.label}" to its state before layer "${file.layer.label}"?`,
+            { modal: true },
+            'Revert'
+        );
+        if (confirm === 'Revert') {
+            await layerProvider.revertFile(file);
+            vscode.window.showInformationMessage(`Reverted "${file.label}".`);
+            layerProvider.refresh();
         }
     }));
 

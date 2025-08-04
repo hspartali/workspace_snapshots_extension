@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export class Git {
     private repoRoot: string | null = null;
@@ -18,7 +19,9 @@ export class Git {
                 if (error) {
                     return reject(new Error(`Git command failed: ${stderr || error.message}`));
                 }
-                resolve(stdout.trim());
+                // Do NOT trim the output here. Trimming can corrupt patch files.
+                // Callers are responsible for processing the raw output.
+                resolve(stdout);
             });
         });
     }
@@ -45,37 +48,28 @@ export class Git {
         }
     }
 
-    public async getStagedFiles(): Promise<string[]> {
-        const output = await this.execute('git diff --name-only --cached');
-        return output ? output.split('\n') : [];
+    public async getChangedFiles(): Promise<string[]> {
+        // This gets all changed files (staged and unstaged)
+        const output = await this.execute('git diff --name-only HEAD');
+        const trimmedOutput = output.trim();
+        return trimmedOutput ? trimmedOutput.split('\n') : [];
     }
 
-    public async createPatchFromIndex(patchPath: string): Promise<void> {
-        // Using `>` is tricky with child_process, so we pipe it.
-        const command = `git diff --cached > "${patchPath}"`;
-        await this.execute(command);
-    }
-    
-    public async applyPatch(patchPath: string): Promise<void> {
-        // --reject ensures that patch application doesn't stop on first error
-        await this.execute(`git apply --reject "${patchPath}"`);
-    }
-
-    public async resetHard(): Promise<void> {
-        await this.execute('git reset --hard HEAD');
-    }
-    
-    public async stash(): Promise<boolean> {
-        const output = await this.execute('git stash push -m "changelayer-temp-stash"');
-        return !output.includes("No local changes to save");
-    }
-
-    public async stashPop(): Promise<void> {
+    public async getFileContentAtHead(filePath: string): Promise<string> {
         try {
-            await this.execute('git stash pop');
+            return await this.execute(`git show HEAD:"${filePath}"`);
         } catch (error) {
-            // Ignore error if nothing to pop
-            console.warn("Could not pop stash, it might have been empty.", error);
+            // File likely didn't exist at HEAD, which is a valid state
+            return '';
         }
+    }
+
+    public async checkoutFiles(files: string[]): Promise<void> {
+        if (files.length === 0) {
+            return;
+        }
+        // Quote files to handle paths with spaces
+        const quotedFiles = files.map(f => `"${f}"`).join(' ');
+        await this.execute(`git checkout -- ${quotedFiles}`);
     }
 }

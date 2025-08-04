@@ -17,7 +17,7 @@
     "commands": [
       {
         "command": "changelayers.snapshot",
-        "title": "Snapshot Staged Changes as New Layer",
+        "title": "Snapshot as New Layer",
         "icon": "$(add)"
       },
       {
@@ -28,6 +28,11 @@
       {
         "command": "changelayers.showDiff",
         "title": "Show Layer-on-Layer Diff"
+      },
+      {
+        "command": "changelayers.discardFile",
+        "title": "Revert File to Previous Layer",
+        "icon": "$(discard)"
       },
       {
         "command": "changelayers.discard",
@@ -81,7 +86,12 @@
         {
           "command": "changelayers.discard",
           "when": "view == changeLayersView && viewItem == layer",
-          "group": "inline"
+          "group": "inline@1"
+        },
+        {
+            "command": "changelayers.discardFile",
+            "when": "view == changeLayersView && viewItem == layerFile",
+            "group": "inline@1"
         }
       ]
     }
