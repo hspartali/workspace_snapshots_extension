@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
-export class Layer extends vscode.TreeItem {
+export class Snapshot extends vscode.TreeItem {
     constructor(
         public readonly label: string,
         public readonly id: string,
@@ -9,26 +9,26 @@ export class Layer extends vscode.TreeItem {
         public readonly changedFiles: { path: string, status: 'A' | 'M' | 'D' }[],
     ) {
         super(label, vscode.TreeItemCollapsibleState.Collapsed);
-        this.tooltip = `Layer: ${this.label}\nID: ${this.id}`;
+        this.tooltip = `Snapshot: ${this.label}\nID: ${this.id}`;
         this.description = `${this.changedFiles.length} file(s)`;
-        this.contextValue = 'layer';
+        this.contextValue = 'snapshot';
         this.iconPath = new vscode.ThemeIcon('layers');
     }
 
-    getFiles(): LayerFile[] {
-        return this.changedFiles.map(file => new LayerFile(file.path, file.status, this));
+    getFiles(): SnapshotFile[] {
+        return this.changedFiles.map(file => new SnapshotFile(file.path, file.status, this));
     }
 
-    getPreviousLayerName(): string {
-       return `State before this layer`;
+    getPreviousSnapshotName(): string {
+       return `State before this snapshot`;
     }
 }
 
-export class LayerFile extends vscode.TreeItem {
+export class SnapshotFile extends vscode.TreeItem {
     constructor(
         public readonly label: string,
         public readonly status: 'A' | 'M' | 'D',
-        public readonly layer: Layer
+        public readonly snapshot: Snapshot
     ) {
         super(path.basename(label), vscode.TreeItemCollapsibleState.None);
         const dirname = path.dirname(label);
@@ -36,21 +36,21 @@ export class LayerFile extends vscode.TreeItem {
         this.description = dirname === '.' ? '' : dirname;
 
         // The resourceUri needs to be the full path to the file for VS Code to find the correct file icon.
-        // We also add the layerId and file path to the query so our new DecorationProvider can add the U/M/D status.
+        // We also add the snapshotId and file path to the query so our new DecorationProvider can add the U/M/D status.
         const fullPath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, label);
-        this.resourceUri = vscode.Uri.file(fullPath).with({ query: `layerId=${layer.id}&path=${label}` });
+        this.resourceUri = vscode.Uri.file(fullPath).with({ query: `snapshotId=${snapshot.id}&path=${label}` });
 
         this.command = {
-            command: 'changelayers.showDiff',
-            title: 'Show Layer Diff',
-            arguments: [this.layer, this.label]
+            command: 'workspace_snapshots.showDiff',
+            title: 'Show Snapshot Diff',
+            arguments: [this.snapshot, this.label]
         };
 
         // We set a more specific context value for deleted files to control which commands are shown.
-        this.contextValue = status === 'D' ? 'layerFile-deleted' : 'layerFile';
+        this.contextValue = status === 'D' ? 'snapshotFile-deleted' : 'snapshotFile';
 
         // We no longer set iconPath, so VS Code will use the file-type icon from the user's theme.
-        // The status (A, M, D) will be handled by the LayerFileDecorationProvider.
-        this.tooltip = `${status === 'A' ? 'Added' : status === 'M' ? 'Modified' : 'Deleted'} in layer: ${label}`;
+        // The status (A, M, D) will be handled by the SnapshotFileDecorationProvider.
+        this.tooltip = `${status === 'A' ? 'Added' : status === 'M' ? 'Modified' : 'Deleted'} in snapshot: ${label}`;
     }
 }

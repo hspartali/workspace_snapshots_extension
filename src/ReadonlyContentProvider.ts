@@ -18,16 +18,16 @@ export class ReadonlyContentProvider implements vscode.TextDocumentContentProvid
             return this.git.getFileContentAtHead(filePath);
         }
 
-        if (query.has('layerId')) {
+        if (query.has('snapshotId')) {
             // Content is from a snapshot
-            const layerId = query.get('layerId')!;
-            const snapshotPath = path.join(workspaceRoot, '.vscode', 'changelayers', 'snapshots', layerId, filePath);
+            const snapshotId = query.get('snapshotId')!;
+            const snapshotPath = path.join(workspaceRoot, '.vscode', 'workspace_snapshots', snapshotId, filePath);
             if (fs.existsSync(snapshotPath)) {
                 return fs.readFileSync(snapshotPath, 'utf-8');
             }
         }
         
-        // Return empty string if no content could be found (e.g. file was created new in a layer)
+        // Return empty string if no content could be found (e.g. file was created new in a snapshot)
         return '';
     }
 }

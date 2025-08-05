@@ -1,7 +1,7 @@
 {
   "name": "changelayers",
-  "displayName": "Change Layers",
-  "description": "Manage and diff sequential, uncommitted change sets as layers.",
+  "displayName": "Workspace Snapshots",
+  "description": "Manage and diff sequential, uncommitted change sets as snapshots.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.80.0"
@@ -10,47 +10,47 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:changeLayersView"
+    "onView:workspaceSnapshotsView"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "changelayers.snapshot",
-        "title": "Snapshot as New Layer",
+        "command": "workspace_snapshots.snapshot",
+        "title": "Create New Snapshot",
         "icon": "$(add)"
       },
       {
-        "command": "changelayers.refresh",
+        "command": "workspace_snapshots.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
-        "command": "changelayers.showDiff",
-        "title": "Show Layer-on-Layer Diff"
+        "command": "workspace_snapshots.showDiff",
+        "title": "Show Snapshot Diff"
       },
       {
-        "command": "changelayers.discardFile",
-        "title": "Revert File to Previous Layer",
+        "command": "workspace_snapshots.discardFile",
+        "title": "Revert File to Previous State",
         "icon": "$(discard)"
       },
       {
-        "command": "changelayers.discard",
-        "title": "Discard Layer",
+        "command": "workspace_snapshots.discard",
+        "title": "Discard Snapshot",
         "icon": "$(discard)"
       },
       {
-        "command": "changelayers.discardAll",
-        "title": "Discard All Layers",
+        "command": "workspace_snapshots.discardAll",
+        "title": "Discard All Snapshots",
         "icon": "$(discard)"
       },
       {
-        "command": "changelayers.clearAllLayers",
-        "title": "Clear All Layers (Keep Current Files)",
+        "command": "workspace_snapshots.clearAllSnapshots",
+        "title": "Clear All Snapshots (Keep Current Files)",
         "icon": "$(trash)"
       },
       {
-        "command": "changelayers.openFile",
+        "command": "workspace_snapshots.openFile",
         "title": "Open File",
         "icon": "$(go-to-file)"
       }
@@ -58,59 +58,59 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "change-layers-container",
-          "title": "Change Layers",
+          "id": "workspace-snapshots-container",
+          "title": "Workspace Snapshots",
           "icon": "$(layers)"
         }
       ]
     },
     "views": {
-      "change-layers-container": [
+      "workspace-snapshots-container": [
         {
-          "id": "changeLayersView",
-          "name": "Layers",
+          "id": "workspaceSnapshotsView",
+          "name": "Snapshots",
           "icon": "$(layers)",
-          "contextualTitle": "Change Layers"
+          "contextualTitle": "Workspace Snapshots"
         }
       ]
     },
     "menus": {
       "view/title": [
         {
-          "command": "changelayers.snapshot",
-          "when": "view == changeLayersView",
+          "command": "workspace_snapshots.snapshot",
+          "when": "view == workspaceSnapshotsView",
           "group": "navigation"
         },
         {
-          "command": "changelayers.discardAll",
-          "when": "view == changeLayersView",
+          "command": "workspace_snapshots.discardAll",
+          "when": "view == workspaceSnapshotsView",
           "group": "navigation"
         },
         {
-          "command": "changelayers.clearAllLayers",
-          "when": "view == changeLayersView",
+          "command": "workspace_snapshots.clearAllSnapshots",
+          "when": "view == workspaceSnapshotsView",
           "group": "navigation"
         },
         {
-          "command": "changelayers.refresh",
-          "when": "view == changeLayersView",
+          "command": "workspace_snapshots.refresh",
+          "when": "view == workspaceSnapshotsView",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
-          "command": "changelayers.discard",
-          "when": "view == changeLayersView && viewItem == layer",
+          "command": "workspace_snapshots.discard",
+          "when": "view == workspaceSnapshotsView && viewItem == snapshot",
           "group": "inline@1"
         },
         {
-            "command": "changelayers.discardFile",
-            "when": "view == changeLayersView && viewItem =~ /^layerFile/",
+            "command": "workspace_snapshots.discardFile",
+            "when": "view == workspaceSnapshotsView && viewItem =~ /^snapshotFile/",
             "group": "inline@1"
         },
         {
-            "command": "changelayers.openFile",
-            "when": "view == changeLayersView && viewItem == 'layerFile'",
+            "command": "workspace_snapshots.openFile",
+            "when": "view == workspaceSnapshotsView && viewItem == 'snapshotFile'",
             "group": "inline@1"
         }
       ]

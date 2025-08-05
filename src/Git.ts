@@ -50,7 +50,7 @@ export class Git {
 
     public async getPotentiallyChangedFiles(): Promise<string[]> {
         // This command lists all files that are deleted, modified, or untracked, while respecting .gitignore.
-        // It provides a simple, reliable list of all files that could be part of a new layer.
+        // It provides a simple, reliable list of all files that could be part of a new snapshot.
         const output = await this.execute('git ls-files --deleted --modified --others --exclude-standard');
         const trimmedOutput = output.trim();
         const files = trimmedOutput ? trimmedOutput.split('\n') : [];

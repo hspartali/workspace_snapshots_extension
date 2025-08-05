@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import { LayerProvider } from './LayerProvider';
+import { SnapshotProvider } from './SnapshotProvider';
 
-export class LayerFileDecorationProvider implements vscode.FileDecorationProvider {
+export class SnapshotFileDecorationProvider implements vscode.FileDecorationProvider {
     private _onDidChangeFileDecorations: vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined> = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
     readonly onDidChangeFileDecorations: vscode.Event<vscode.Uri | vscode.Uri[] | undefined> = this._onDidChangeFileDecorations.event;
 
-    constructor(private layerProvider: LayerProvider) { }
+    constructor(private snapshotProvider: SnapshotProvider) { }
 
     public refresh(): void {
         // Fire with no argument to signal a global refresh for all file decorations.
@@ -14,22 +14,22 @@ export class LayerFileDecorationProvider implements vscode.FileDecorationProvide
 
     async provideFileDecoration(uri: vscode.Uri, token: vscode.CancellationToken): Promise<vscode.FileDecoration | undefined> {
         // We only decorate URIs that are part of our tree view.
-        // We encoded the layerId and path in the query string of the resourceUri.
+        // We encoded the snapshotId and path in the query string of the resourceUri.
         const query = new URLSearchParams(uri.query);
-        const layerId = query.get('layerId');
+        const snapshotId = query.get('snapshotId');
         const filePath = query.get('path');
 
-        if (!layerId || !filePath) {
+        if (!snapshotId || !filePath) {
             // This URI is not from our tree, so we don't decorate it.
             return undefined;
         }
 
-        const layer = this.layerProvider.getLayerById(layerId);
-        if (!layer) {
+        const snapshot = this.snapshotProvider.getSnapshotById(snapshotId);
+        if (!snapshot) {
             return undefined;
         }
 
-        const fileInfo = layer.changedFiles.find(f => f.path === filePath);
+        const fileInfo = snapshot.changedFiles.find(f => f.path === filePath);
         if (!fileInfo) {
             return undefined;
         }

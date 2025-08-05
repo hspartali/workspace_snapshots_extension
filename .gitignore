@@ -28,8 +28,8 @@ Thumbs.db
 # Temporary files and caches
 .npm
 
-# Layer snapshots (local to workspace)
-.vscode/changelayers/
+# Snapshot data (local to workspace)
+.vscode/workspace_snapshots/
 .llmmod/*
 !.llmmod/
 !.llmmod/config.yml
