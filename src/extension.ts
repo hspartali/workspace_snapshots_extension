@@ -8,6 +8,11 @@ import { SnapshotFileDecorationProvider } from './SnapshotFileDecorationProvider
 
 export function activate(context: vscode.ExtensionContext) {
 
+    if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+        // Can't function without a workspace folder.
+        return;
+    }
+
     console.log('Congratulations, your extension "changelayers" is now active!');
 
     const git = new Git();
@@ -18,6 +23,40 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('workspace_snapshot-readonly', readonlyProvider));
     vscode.window.registerTreeDataProvider('workspaceSnapshotsView', snapshotProvider);
     context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorationProvider));
+
+    // Set up a file watcher to refresh readonly content when snapshot files are changed.
+    const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const snapshotStoragePath = path.join(workspaceRoot, '.vscode', 'workspace_snapshots');
+
+    const fileWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(snapshotStoragePath, '**/*')
+    );
+
+    const onFileChange = (diskUri: vscode.Uri) => {
+        // Exclude metadata file from triggering updates as it has no corresponding content URI.
+        if (path.basename(diskUri.fsPath) === 'metadata.json') {
+            return;
+        }
+
+        // The path on disk is .../.vscode/workspace_snapshots/[snapshotId]/[file_path]
+        // We need to build the content provider URI: workspace_snapshot-readonly:[file_path]?snapshotId=[snapshotId]
+        const relativePath = path.relative(snapshotStoragePath, diskUri.fsPath);
+        const standardPath = relativePath.replace(/\\/g, '/'); // Standardize to forward slashes
+        const parts = standardPath.split('/');
+
+        if (parts.length > 1) {
+            const snapshotId = parts[0];
+            const filePath = parts.slice(1).join('/');
+
+            const providerUri = vscode.Uri.parse(`workspace_snapshot-readonly:${filePath}?snapshotId=${snapshotId}`);
+            readonlyProvider.fireOnDidChange(providerUri);
+        }
+    };
+
+    fileWatcher.onDidChange(onFileChange);
+    fileWatcher.onDidCreate(onFileChange);
+    fileWatcher.onDidDelete(onFileChange);
+    context.subscriptions.push(fileWatcher);
 
     // When the tree data changes, we trigger a decoration refresh.
     snapshotProvider.onDidChangeTreeData(() => {

@@ -5,7 +5,14 @@ import { Git } from './Git';
 
 export class ReadonlyContentProvider implements vscode.TextDocumentContentProvider {
 
+    private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
+    readonly onDidChange = this._onDidChange.event;
+
     constructor(private git: Git) {}
+
+    public fireOnDidChange(uri: vscode.Uri) {
+        this._onDidChange.fire(uri);
+    }
 
     async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
         const query = new URLSearchParams(uri.query);
