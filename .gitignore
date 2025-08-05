@@ -30,4 +30,6 @@ Thumbs.db
 
 # Layer snapshots (local to workspace)
 .vscode/changelayers/
-.llmmod/01_prompt_full_crawled.txt
+.llmmod/*
+!.llmmod/
+!.llmmod/config.yml
