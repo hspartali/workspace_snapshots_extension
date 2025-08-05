@@ -57,28 +57,26 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(vscode.commands.registerCommand('changelayers.discardFile', async (file: LayerFile) => {
         const confirm = await vscode.window.showWarningMessage(
-            `Are you sure you want to revert "${file.label}" to its state before layer "${file.layer.label}"?`,
+            `Are you sure you want to remove the change to "${file.label}" from layer "${file.layer.label}"? This will not revert your working file, but will rewrite this layer's history.`,
             { modal: true },
-            'Revert'
+            'Remove Change'
         );
-        if (confirm === 'Revert') {
-            await layerProvider.revertFile(file);
-            vscode.window.showInformationMessage(`Reverted "${file.label}".`);
+        if (confirm === 'Remove Change') {
             layerProvider.removeFileFromLayer(file);
             layerProvider.refresh();
+            vscode.window.showInformationMessage(`Removed change to "${file.label}" from layer history.`);
         }
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('changelayers.discard', async (layer: Layer) => {
         const confirm = await vscode.window.showWarningMessage(
-            `Are you sure you want to discard the layer "${layer.label}"? This is not reversible.`,
+            `Are you sure you want to remove all changes from layer "${layer.label}"? This will not revert your working files, but will rewrite this layer's history. This is not reversible.`,
             { modal: true },
-            'Discard'
+            'Remove All Changes'
         );
-        if (confirm === 'Discard') {
+        if (confirm === 'Remove All Changes') {
             await layerProvider.discardLayer(layer.id);
-            layerProvider.refresh();
-            vscode.window.showInformationMessage(`Layer "${layer.label}" discarded.`);
+            vscode.window.showInformationMessage(`Removed all changes from layer "${layer.label}".`);
         }
     }));
 

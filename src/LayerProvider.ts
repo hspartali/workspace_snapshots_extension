@@ -109,6 +109,13 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         const fileIndex = layer.changedFiles.findIndex(f => f.path === file.label);
         if (fileIndex > -1) {
             layer.changedFiles.splice(fileIndex, 1);
+
+            // Also remove the snapshot file to keep storage clean
+            const snapshotFilePath = path.join(this.getSnapshotsRootPath(), layer.id, file.label);
+            if (fs.existsSync(snapshotFilePath)) {
+                fs.unlinkSync(snapshotFilePath);
+            }
+
             this.saveMetadata();
         }
     }
@@ -247,60 +254,111 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         return { left: leftUri, right: rightUri };
     }
 
-    async revertFile(file: LayerFile) {
+    public async discardFileChange(file: LayerFile): Promise<void> {
         const targetLayerIndex = this.layers.findIndex(l => l.id === file.layer.id);
-        const previousLayer = targetLayerIndex > 0 ? this.layers[targetLayerIndex - 1] : null;
-        const workspaceFilePath = path.join(this.getWorkspaceRoot(), file.label);
-
-        if (previousLayer) {
-            const previousSnapshotPath = path.join(this.getSnapshotsRootPath(), previousLayer.id, file.label);
-            if (fs.existsSync(previousSnapshotPath)) {
-                const contentToRevertTo = fs.readFileSync(previousSnapshotPath, 'utf-8');
-                fs.writeFileSync(workspaceFilePath, contentToRevertTo);
+        if (targetLayerIndex === -1) { return; }
+        const filePath = file.label;
+    
+        // 1. Find subsequent layers that also modify the file.
+        const affectedSubsequentLayers = this.layers
+            .slice(targetLayerIndex + 1)
+            .filter(l => l.changedFiles.some(f => f.path === filePath));
+    
+        // 2. Confirm with the user if subsequent changes will also be discarded.
+        if (affectedSubsequentLayers.length > 0) {
+            const affectedLayerLabels = affectedSubsequentLayers.map(l => `"${l.label}"`).join(', ');
+            const confirm = await vscode.window.showWarningMessage(
+                `Discarding this change will also discard changes to "${filePath}" in subsequent layers: ${affectedLayerLabels}. This cannot be undone.`,
+                { modal: true },
+                'Discard Changes'
+            );
+            if (confirm !== 'Discard Changes') { return; }
+        }
+        // The initial confirmation is handled by the command itself.
+    
+        // 3. Revert the workspace file to its state *before* the target layer.
+        const { content: previousContent, existed: fileExistedBefore } = await this.getPreviousStateContent(filePath, file.layer.id);
+        const workspaceFilePath = path.join(this.getWorkspaceRoot(), filePath);
+    
+        if (fileExistedBefore) {
+            // Use git checkout if reverting to HEAD state to handle line endings correctly.
+            const previousStateInfo = this.getPreviousStateInfo(targetLayerIndex, filePath);
+            if (previousStateInfo.source === 'head') {
+                 await this.git.checkoutFiles([filePath]);
             } else {
-                // File didn't exist in previous layer, so it was added in this one. Reverting means deleting.
-                if (fs.existsSync(workspaceFilePath)) {
-                    fs.unlinkSync(workspaceFilePath);
-                }
+                 fs.writeFileSync(workspaceFilePath, previousContent!);
             }
         } else {
-            // Reverting the first layer means reverting to HEAD state.
-            if (await this.git.fileExistsAtHead(file.label)) {
-                // Use git checkout to properly revert the file to its HEAD state.
-                await this.git.checkoutFiles([file.label]);
-            } else {
-                // File didn't exist at HEAD, so it was added in this layer. Reverting is deletion.
-                if (fs.existsSync(workspaceFilePath)) {
-                    fs.unlinkSync(workspaceFilePath);
+            // File did not exist before, so reverting means deleting it.
+            if (fs.existsSync(workspaceFilePath)) {
+                fs.unlinkSync(workspaceFilePath);
+            }
+        }
+    
+        // 4. Update metadata and clean snapshots for all affected layers.
+        const allAffectedLayers = [file.layer, ...affectedSubsequentLayers];
+        for (const layer of allAffectedLayers) {
+            const fileIndex = layer.changedFiles.findIndex(f => f.path === filePath);
+            if (fileIndex > -1) {
+                layer.changedFiles.splice(fileIndex, 1);
+                const snapshotFilePath = path.join(this.getSnapshotsRootPath(), layer.id, filePath);
+                if (fs.existsSync(snapshotFilePath)) {
+                    fs.unlinkSync(snapshotFilePath);
                 }
             }
         }
+    
+        // 5. Save and refresh.
+        this.saveMetadata();
+        this.refresh();
+        vscode.window.showInformationMessage(`Discarded changes to "${filePath}".`);
+    }
+
+    private async getPreviousStateContent(filePath: string, stopBeforeLayerId: string): Promise<{ content: string | null, existed: boolean }> {
+        const stopIndex = this.layers.findIndex(l => l.id === stopBeforeLayerId);
+        // Search backwards from the layer just before the stopIndex
+        for (let i = stopIndex - 1; i >= 0; i--) {
+            const layer = this.layers[i];
+            const change = layer.changedFiles.find(f => f.path === filePath);
+            if (change) {
+                if (change.status === 'D') {
+                    return { content: null, existed: false };
+                }
+                const snapshotPath = path.join(this.getSnapshotsRootPath(), layer.id, filePath);
+                if (fs.existsSync(snapshotPath)) {
+                    return { content: fs.readFileSync(snapshotPath, 'utf-8'), existed: true };
+                }
+                return { content: null, existed: false };
+            }
+        }
+    
+        // If the file was never seen in any previous layer, its state is determined by HEAD.
+        const existedAtHead = await this.git.fileExistsAtHead(filePath);
+        if (existedAtHead) {
+            const content = await this.git.getFileContentAtHead(filePath);
+            return { content, existed: true };
+        }
+    
+        return { content: null, existed: false };
     }
 
     async discardLayer(layerId: string): Promise<void> {
-        const layerIndex = this.layers.findIndex(l => l.id === layerId);
-        if (layerIndex === -1) { return; }
+        const layerToDiscard = this.layers.find(l => l.id === layerId);
+        if (!layerToDiscard) { return; }
 
-        if (layerIndex < this.layers.length - 1) {
-            throw new Error('For safety, only the most recent layer can be discarded.');
-        }
+        // Clear the list of changed files for this layer in the metadata.
+        layerToDiscard.changedFiles.splice(0, layerToDiscard.changedFiles.length);
 
-        const layerToDiscard = this.layers[layerIndex];
-        // Revert all files in the discarded layer in parallel for better performance.
-        const revertPromises = layerToDiscard.changedFiles.map(fileChange =>
-            this.revertFile(new LayerFile(fileChange.path, fileChange.status, layerToDiscard))
-        );
-        await Promise.all(revertPromises);
-
-        // Delete snapshot directory
+        // Delete the entire snapshot directory for this layer to remove all its history.
         const snapshotDir = path.join(this.getSnapshotsRootPath(), layerToDiscard.id);
         if (fs.existsSync(snapshotDir)) {
             fs.rmSync(snapshotDir, { recursive: true, force: true });
         }
-        
-        // Update metadata
-        this.layers.pop();
+
+        // Save the updated metadata and refresh the view.
+        // The layer will now be empty and filtered out by the getChildren method.
         this.saveMetadata();
+        this.refresh();
     }
 
     async discardAllLayers(): Promise<void> {
