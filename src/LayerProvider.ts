@@ -228,14 +228,17 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         const targetLayerIndex = this.layers.findIndex(l => l.id === targetLayer.id);
         if (targetLayerIndex === -1) return null;
 
-        const isLastLayer = targetLayerIndex === this.layers.length - 1;
+        // Check if there are any subsequent layers that also modify this file.
+        const isLastChangeForThisFile = !this.layers
+            .slice(targetLayerIndex + 1)
+            .some(l => l.changedFiles.some(f => f.path === filePath));
 
         let rightUri: vscode.Uri;
-        if (isLastLayer) {
-            // For the most recent layer, compare against the live file in the workspace. This makes it editable.
+        if (isLastChangeForThisFile) {
+            // If this is the last time this file was changed in any layer, compare against the live workspace file.
             rightUri = vscode.Uri.file(path.join(this.getWorkspaceRoot(), filePath));
         } else {
-            // For historical layers, use the static snapshot.
+            // Otherwise, compare against the historical snapshot for this layer.
             const rightSnapshotPath = path.join(this.getSnapshotsRootPath(), targetLayer.id, filePath);
             rightUri = vscode.Uri.file(rightSnapshotPath);
         }
