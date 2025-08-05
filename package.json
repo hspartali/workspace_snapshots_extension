@@ -48,6 +48,11 @@
         "command": "changelayers.clearAllLayers",
         "title": "Clear All Layers (Keep Current Files)",
         "icon": "$(trash)"
+      },
+      {
+        "command": "changelayers.openFile",
+        "title": "Open File",
+        "icon": "$(go-to-file)"
       }
     ],
     "viewsContainers": {
@@ -100,7 +105,12 @@
         },
         {
             "command": "changelayers.discardFile",
-            "when": "view == changeLayersView && viewItem == layerFile",
+            "when": "view == changeLayersView && viewItem =~ /^layerFile/",
+            "group": "inline@1"
+        },
+        {
+            "command": "changelayers.openFile",
+            "when": "view == changeLayersView && viewItem == 'layerFile'",
             "group": "inline@1"
         }
       ]

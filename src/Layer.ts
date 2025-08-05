@@ -34,27 +34,23 @@ export class LayerFile extends vscode.TreeItem {
         const dirname = path.dirname(label);
         // Only show the description if it's a real subdirectory, not '.'
         this.description = dirname === '.' ? '' : dirname;
-        this.resourceUri = vscode.Uri.file(path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, label));
+
+        // The resourceUri needs to be the full path to the file for VS Code to find the correct file icon.
+        // We also add the layerId and file path to the query so our new DecorationProvider can add the U/M/D status.
+        const fullPath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, label);
+        this.resourceUri = vscode.Uri.file(fullPath).with({ query: `layerId=${layer.id}&path=${label}` });
+
         this.command = {
             command: 'changelayers.showDiff',
             title: 'Show Layer Diff',
             arguments: [this.layer, this.label]
         };
-        this.contextValue = 'layerFile';
 
-        switch (status) {
-            case 'A':
-                this.iconPath = new vscode.ThemeIcon('diff-added');
-                this.tooltip = `Added in layer: ${label}`;
-                break;
-            case 'M':
-                this.iconPath = new vscode.ThemeIcon('diff-modified');
-                this.tooltip = `Modified in layer: ${label}`;
-                break;
-            case 'D':
-                this.iconPath = new vscode.ThemeIcon('diff-removed');
-                this.tooltip = `Deleted in layer: ${label}`;
-                break;
-        }
+        // We set a more specific context value for deleted files to control which commands are shown.
+        this.contextValue = status === 'D' ? 'layerFile-deleted' : 'layerFile';
+
+        // We no longer set iconPath, so VS Code will use the file-type icon from the user's theme.
+        // The status (A, M, D) will be handled by the LayerFileDecorationProvider.
+        this.tooltip = `${status === 'A' ? 'Added' : status === 'M' ? 'Modified' : 'Deleted'} in layer: ${label}`;
     }
 }

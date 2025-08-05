@@ -5,6 +5,7 @@ import { Git } from './Git';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ReadonlyContentProvider } from './ReadonlyContentProvider';
+import { LayerFileDecorationProvider } from './LayerFileDecorationProvider';
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -13,9 +14,16 @@ export function activate(context: vscode.ExtensionContext) {
     const git = new Git();
     const layerProvider = new LayerProvider(context, git);
     const readonlyProvider = new ReadonlyContentProvider(git);
+    const decorationProvider = new LayerFileDecorationProvider(layerProvider);
 
     context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('changelayer-readonly', readonlyProvider));
     vscode.window.registerTreeDataProvider('changeLayersView', layerProvider);
+    context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorationProvider));
+
+    // When the tree data changes, we trigger a decoration refresh.
+    layerProvider.onDidChangeTreeData(() => {
+        decorationProvider.refresh();
+    });
 
     context.subscriptions.push(vscode.commands.registerCommand('changelayers.refresh', () => {
         layerProvider.refresh();
@@ -97,6 +105,22 @@ export function activate(context: vscode.ExtensionContext) {
             await layerProvider.clearAllLayers();
             layerProvider.refresh();
             vscode.window.showInformationMessage('All layers history has been cleared.');
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('changelayers.openFile', async (file: LayerFile) => {
+        const workspaceRoot = git.getRepoRoot();
+        if (!workspaceRoot) {
+            vscode.window.showErrorMessage("Could not find repository root.");
+            return;
+        }
+
+        try {
+            const fileUri = vscode.Uri.file(path.join(workspaceRoot, file.label));
+            const doc = await vscode.workspace.openTextDocument(fileUri);
+            await vscode.window.showTextDocument(doc, { preview: false });
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Could not open file '${file.label}': ${error.message}`);
         }
     }));
 }

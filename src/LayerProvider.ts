@@ -38,6 +38,10 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         }
     }
 
+    public getLayerById(id: string): Layer | undefined {
+        return this.layers.find(l => l.id === id);
+    }
+
     // --- Storage and Metadata ---
 
     private getWorkspaceRoot(): string {
@@ -197,11 +201,26 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         this.saveMetadata();
     }
 
+    private getPreviousStateInfo(targetLayerIndex: number, filePath: string): { source: 'layer', layerId: string } | { source: 'head' } {
+        // Search backwards from the layer just before the target layer.
+        for (let i = targetLayerIndex - 1; i >= 0; i--) {
+            const layer = this.layers[i];
+            const fileChange = layer.changedFiles.find(f => f.path === filePath);
+            if (fileChange) {
+                // We found the most recent mention of the file before our target layer.
+                // We return this layer's ID. The content provider will either find the snapshot
+                // (for A or M) or find nothing (for D), which correctly represents the state.
+                return { source: 'layer', layerId: layer.id };
+            }
+        }
+        // If we didn't find it in any previous layer, its previous state is whatever is at HEAD.
+        return { source: 'head' };
+    }
+
     async getDiffUris(targetLayer: Layer, filePath: string): Promise<{ left: vscode.Uri, right: vscode.Uri } | null> {
         const targetLayerIndex = this.layers.findIndex(l => l.id === targetLayer.id);
         if (targetLayerIndex === -1) return null;
 
-        const previousLayer = targetLayerIndex > 0 ? this.layers[targetLayerIndex - 1] : null;
         const isLastLayer = targetLayerIndex === this.layers.length - 1;
 
         let rightUri: vscode.Uri;
@@ -214,14 +233,13 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
             rightUri = vscode.Uri.file(rightSnapshotPath);
         }
 
-        // The logic for the "left" side now uses a virtual document to ensure it's read-only.
         let leftUri: vscode.Uri;
-        if (previousLayer) {
-            // The URI contains the file path and the layer ID in the query
-            const query = `layerId=${previousLayer.id}`;
+        const previousState = this.getPreviousStateInfo(targetLayerIndex, filePath);
+
+        if (previousState.source === 'layer') {
+            const query = `layerId=${previousState.layerId}`;
             leftUri = vscode.Uri.parse(`changelayer-readonly:${filePath}?${query}`);
-        } else {
-            // For the first layer, the URI indicates we should get the content from HEAD
+        } else { // source is 'head'
             const query = `head=true`;
             leftUri = vscode.Uri.parse(`changelayer-readonly:${filePath}?${query}`);
         }
