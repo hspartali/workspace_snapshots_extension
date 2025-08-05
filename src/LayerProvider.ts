@@ -34,7 +34,7 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         if (element) {
             return element.getFiles();
         } else {
-            return this.layers;
+            return this.layers.filter(layer => layer.changedFiles.length > 0);
         }
     }
 
@@ -95,6 +95,18 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
             fs.mkdirSync(this.getLayersRootPath(), { recursive: true });
         }
         fs.writeFileSync(this.getMetadataPath(), JSON.stringify(layersData, null, 2));
+    }
+
+    public removeFileFromLayer(file: LayerFile) {
+        const layer = this.layers.find(l => l.id === file.layer.id);
+        if (!layer) {
+            return;
+        }
+        const fileIndex = layer.changedFiles.findIndex(f => f.path === file.label);
+        if (fileIndex > -1) {
+            layer.changedFiles.splice(fileIndex, 1);
+            this.saveMetadata();
+        }
     }
 
     // --- Core Functionality ---

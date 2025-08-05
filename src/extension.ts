@@ -56,6 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (confirm === 'Revert') {
             await layerProvider.revertFile(file);
             vscode.window.showInformationMessage(`Reverted "${file.label}".`);
+            layerProvider.removeFileFromLayer(file);
             layerProvider.refresh();
         }
     }));
