@@ -157,6 +157,14 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
             if (fs.existsSync(snapshotFilePath)) {
                 fs.unlinkSync(snapshotFilePath);
             }
+
+            // If this was the last file in the snapshot, clean up the snapshot's now-empty directory.
+            if (snapshot.changedFiles.length === 0) {
+                const snapshotDir = path.join(this.getSnapshotsRootPath(), snapshot.id);
+                if (fs.existsSync(snapshotDir)) {
+                    fs.rmSync(snapshotDir, { recursive: true, force: true });
+                }
+            }
         }
     }
 

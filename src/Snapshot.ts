@@ -12,7 +12,7 @@ export class Snapshot extends vscode.TreeItem {
         this.tooltip = `Snapshot: ${this.label}\nID: ${this.id}`;
         this.description = `${this.changedFiles.length} file(s)`;
         this.contextValue = 'snapshot';
-        this.iconPath = new vscode.ThemeIcon('layers');
+        this.iconPath = new vscode.ThemeIcon('device-camera');
     }
 
     getFiles(): SnapshotFile[] {
