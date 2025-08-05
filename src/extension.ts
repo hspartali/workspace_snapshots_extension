@@ -56,15 +56,30 @@ export function activate(context: vscode.ExtensionContext) {
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('changelayers.discardFile', async (file: LayerFile) => {
-        const confirm = await vscode.window.showWarningMessage(
-            `Are you sure you want to remove the change to "${file.label}" from layer "${file.layer.label}"? This will not revert your working file, but will rewrite this layer's history.`,
-            { modal: true },
-            'Remove Change'
-        );
-        if (confirm === 'Remove Change') {
-            layerProvider.removeFileFromLayer(file);
+        const isLastChange = layerProvider.isLastChangeForFile(file);
+
+        let confirm: string | undefined;
+        if (isLastChange) {
+            confirm = await vscode.window.showWarningMessage(
+                `This is the last change to "${file.label}". This action will revert your working file to its previous state and remove the change from this layer's history. This cannot be undone.`,
+                { modal: true },
+                'Discard and Revert File'
+            );
+        } else {
+            confirm = await vscode.window.showWarningMessage(
+                `This change to "${file.label}" is superseded by a later layer. This action will only remove the change from this layer's history and will NOT revert your working file.`,
+                { modal: true },
+                'Remove from History'
+            );
+        }
+
+        if (confirm) { // User confirmed one of the actions
+            await layerProvider.discardOrRemoveFileFromLayer(file);
             layerProvider.refresh();
-            vscode.window.showInformationMessage(`Removed change to "${file.label}" from layer history.`);
+            const message = isLastChange
+                ? `Reverted "${file.label}" and removed it from the layer.`
+                : `Removed change to "${file.label}" from layer history.`;
+            vscode.window.showInformationMessage(message);
         }
     }));
 

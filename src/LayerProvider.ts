@@ -101,7 +101,53 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         fs.writeFileSync(this.getMetadataPath(), JSON.stringify(layersData, null, 2));
     }
 
-    public removeFileFromLayer(file: LayerFile) {
+    public isLastChangeForFile(file: LayerFile): boolean {
+        const targetLayerIndex = this.layers.findIndex(l => l.id === file.layer.id);
+        if (targetLayerIndex === -1) {
+            return true; // Should not happen, but safer to assume it's the last.
+        }
+        const filePath = file.label;
+        // Search in layers *after* the current one.
+        return !this.layers
+            .slice(targetLayerIndex + 1)
+            .some(l => l.changedFiles.some(f => f.path === filePath));
+    }
+
+    public async discardOrRemoveFileFromLayer(file: LayerFile): Promise<void> {
+        const isLastChange = this.isLastChangeForFile(file);
+
+        if (isLastChange) {
+            // DISCARD logic: Revert the live file
+            const targetLayerIndex = this.layers.findIndex(l => l.id === file.layer.id);
+            if (targetLayerIndex === -1) { return; }
+
+            const filePath = file.label;
+            const { content: previousContent, existed: fileExistedBefore } = await this.getPreviousStateContent(filePath, file.layer.id);
+            const workspaceFilePath = path.join(this.getWorkspaceRoot(), filePath);
+
+            if (fileExistedBefore) {
+                // Revert file to previous state
+                const previousStateInfo = this.getPreviousStateInfo(targetLayerIndex, filePath);
+                if (previousStateInfo.source === 'head') {
+                    await this.git.checkoutFiles([filePath]);
+                } else {
+                    fs.writeFileSync(workspaceFilePath, previousContent!);
+                }
+            } else {
+                // File didn't exist before, so delete it
+                if (fs.existsSync(workspaceFilePath)) {
+                    fs.unlinkSync(workspaceFilePath);
+                }
+            }
+        }
+
+        // For both cases (discard or remove), remove the file from this layer's metadata and snapshot.
+        this.removeFileFromLayerInternal(file);
+
+        this.saveMetadata();
+    }
+
+    private removeFileFromLayerInternal(file: LayerFile) {
         const layer = this.layers.find(l => l.id === file.layer.id);
         if (!layer) {
             return;
@@ -115,8 +161,6 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
             if (fs.existsSync(snapshotFilePath)) {
                 fs.unlinkSync(snapshotFilePath);
             }
-
-            this.saveMetadata();
         }
     }
 
@@ -255,66 +299,6 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         }
 
         return { left: leftUri, right: rightUri };
-    }
-
-    public async discardFileChange(file: LayerFile): Promise<void> {
-        const targetLayerIndex = this.layers.findIndex(l => l.id === file.layer.id);
-        if (targetLayerIndex === -1) { return; }
-        const filePath = file.label;
-    
-        // 1. Find subsequent layers that also modify the file.
-        const affectedSubsequentLayers = this.layers
-            .slice(targetLayerIndex + 1)
-            .filter(l => l.changedFiles.some(f => f.path === filePath));
-    
-        // 2. Confirm with the user if subsequent changes will also be discarded.
-        if (affectedSubsequentLayers.length > 0) {
-            const affectedLayerLabels = affectedSubsequentLayers.map(l => `"${l.label}"`).join(', ');
-            const confirm = await vscode.window.showWarningMessage(
-                `Discarding this change will also discard changes to "${filePath}" in subsequent layers: ${affectedLayerLabels}. This cannot be undone.`,
-                { modal: true },
-                'Discard Changes'
-            );
-            if (confirm !== 'Discard Changes') { return; }
-        }
-        // The initial confirmation is handled by the command itself.
-    
-        // 3. Revert the workspace file to its state *before* the target layer.
-        const { content: previousContent, existed: fileExistedBefore } = await this.getPreviousStateContent(filePath, file.layer.id);
-        const workspaceFilePath = path.join(this.getWorkspaceRoot(), filePath);
-    
-        if (fileExistedBefore) {
-            // Use git checkout if reverting to HEAD state to handle line endings correctly.
-            const previousStateInfo = this.getPreviousStateInfo(targetLayerIndex, filePath);
-            if (previousStateInfo.source === 'head') {
-                 await this.git.checkoutFiles([filePath]);
-            } else {
-                 fs.writeFileSync(workspaceFilePath, previousContent!);
-            }
-        } else {
-            // File did not exist before, so reverting means deleting it.
-            if (fs.existsSync(workspaceFilePath)) {
-                fs.unlinkSync(workspaceFilePath);
-            }
-        }
-    
-        // 4. Update metadata and clean snapshots for all affected layers.
-        const allAffectedLayers = [file.layer, ...affectedSubsequentLayers];
-        for (const layer of allAffectedLayers) {
-            const fileIndex = layer.changedFiles.findIndex(f => f.path === filePath);
-            if (fileIndex > -1) {
-                layer.changedFiles.splice(fileIndex, 1);
-                const snapshotFilePath = path.join(this.getSnapshotsRootPath(), layer.id, filePath);
-                if (fs.existsSync(snapshotFilePath)) {
-                    fs.unlinkSync(snapshotFilePath);
-                }
-            }
-        }
-    
-        // 5. Save and refresh.
-        this.saveMetadata();
-        this.refresh();
-        vscode.window.showInformationMessage(`Discarded changes to "${filePath}".`);
     }
 
     private async getPreviousStateContent(filePath: string, stopBeforeLayerId: string): Promise<{ content: string | null, existed: boolean }> {
