@@ -2,6 +2,8 @@
 
 **Checkpoint and diff uncommitted changes, safely outside your Git history.**
 
+![Workspace Snapshots Demo](demo.gif)
+
 Ever wanted to save multiple "versions" of your work before you're ready to commit? Workspace Snapshots lets you create sequential checkpoints of your code, making it easy to track, review, and roll back changes.
 
 It's perfect for exploratory coding, complex refactors, or just organizing your thought process.
