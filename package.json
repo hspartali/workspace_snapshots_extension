@@ -37,12 +37,17 @@
       {
         "command": "changelayers.discard",
         "title": "Discard Layer",
-        "icon": "$(trash)"
+        "icon": "$(discard)"
       },
       {
         "command": "changelayers.discardAll",
         "title": "Discard All Layers",
-        "icon": "$(clear-all)"
+        "icon": "$(discard)"
+      },
+      {
+        "command": "changelayers.clearAllLayers",
+        "title": "Clear All Layers (Keep Current Files)",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -73,6 +78,11 @@
         },
         {
           "command": "changelayers.discardAll",
+          "when": "view == changeLayersView",
+          "group": "navigation"
+        },
+        {
+          "command": "changelayers.clearAllLayers",
           "when": "view == changeLayersView",
           "group": "navigation"
         },

@@ -76,14 +76,27 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(vscode.commands.registerCommand('changelayers.discardAll', async () => {
         const confirm = await vscode.window.showWarningMessage(
-            `Are you sure you want to discard ALL layers? This is not reversible.`,
+            `Are you sure you want to discard ALL layers? This is not reversible and will revert your files.`,
             { modal: true },
             'Discard All'
         );
         if (confirm === 'Discard All') {
             await layerProvider.discardAllLayers();
             layerProvider.refresh();
-            vscode.window.showInformationMessage('All layers have been discarded.');
+            vscode.window.showInformationMessage('All layers have been discarded and files reverted.');
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('changelayers.clearAllLayers', async () => {
+        const confirm = await vscode.window.showWarningMessage(
+            `Are you sure you want to clear ALL layers history? This will NOT revert your files, only remove the layer metadata and snapshots. This is not reversible.`,
+            { modal: true },
+            'Clear All'
+        );
+        if (confirm === 'Clear All') {
+            await layerProvider.clearAllLayers();
+            layerProvider.refresh();
+            vscode.window.showInformationMessage('All layers history has been cleared.');
         }
     }));
 }

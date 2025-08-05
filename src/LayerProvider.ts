@@ -304,4 +304,15 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         this.layers = [];
         this.refresh();
     }
+
+    async clearAllLayers(): Promise<void> {
+        // Delete all snapshots and metadata without touching working directory files
+        const layersRoot = this.getLayersRootPath();
+        if (fs.existsSync(layersRoot)) {
+            fs.rmSync(layersRoot, { recursive: true, force: true });
+        }
+
+        this.layers = [];
+        // No need to refresh here, as refresh is called immediately after in extension.ts
+    }
 }
