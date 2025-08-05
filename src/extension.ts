@@ -13,7 +13,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
     }
 
-    console.log('Congratulations, your extension "changelayers" is now active!');
+    console.log('Congratulations, your extension "workspace-snapshots" is now active!');
 
     const git = new Git();
     const snapshotProvider = new SnapshotProvider(context, git);
