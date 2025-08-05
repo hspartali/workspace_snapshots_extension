@@ -236,8 +236,8 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         } else {
             // Reverting the first layer means reverting to HEAD state.
             if (await this.git.fileExistsAtHead(file.label)) {
-                const contentToRevertTo = await this.git.getFileContentAtHead(file.label);
-                fs.writeFileSync(workspaceFilePath, contentToRevertTo);
+                // Use git checkout to properly revert the file to its HEAD state.
+                await this.git.checkoutFiles([file.label]);
             } else {
                 // File didn't exist at HEAD, so it was added in this layer. Reverting is deletion.
                 if (fs.existsSync(workspaceFilePath)) {
@@ -256,10 +256,11 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
         }
 
         const layerToDiscard = this.layers[layerIndex];
-        // Revert all files in the discarded layer
-        for (const fileChange of layerToDiscard.changedFiles) {
-            await this.revertFile(new LayerFile(fileChange.path, fileChange.status, layerToDiscard));
-        }
+        // Revert all files in the discarded layer in parallel for better performance.
+        const revertPromises = layerToDiscard.changedFiles.map(fileChange =>
+            this.revertFile(new LayerFile(fileChange.path, fileChange.status, layerToDiscard))
+        );
+        await Promise.all(revertPromises);
 
         // Delete snapshot directory
         const snapshotDir = path.join(this.getSnapshotsRootPath(), layerToDiscard.id);
