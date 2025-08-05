@@ -1,25 +1,32 @@
-# Workspace Snapshots VS Code Extension
+# 📸 Workspace Snapshots
 
-This extension provides a way to manage sequential sets of uncommitted changes in "Snapshots". You can create snapshots of your current changes and view the difference between each snapshot.
+**Checkpoint and diff uncommitted changes, safely outside your Git history.**
 
-## Features
+Ever wanted to save multiple "versions" of your work before you're ready to commit? Workspace Snapshots lets you create sequential checkpoints of your code, making it easy to track, review, and roll back changes.
 
-*   **Snapshot Changes**: Create a "Snapshot" from your current file changes.
-*   **Snapshot Diffs**: View the changes introduced in one snapshot relative to the previous one.
-*   **Discard Snapshots**: Easily discard a set of changes.
+It's perfect for exploratory coding, complex refactors, or just organizing your thought process.
 
-## How to Use
+---
 
-1.  Open the "Workspace Snapshots" view from the Activity Bar.
-2.  Make some changes to your files.
-3.  Click the `+` icon in the "Snapshots" view title bar to create a new snapshot.
-4.  As you create more snapshots, you can click on the files within each snapshot to see the diff between it and the state after the previous snapshot was applied.
+### ✨ Features
 
-## Commands
+-   📸 **Create Snapshots**: One-click checkpoint of all your current file changes.
+-   🔍 **Incremental Diffs**: Instantly see what changed in each specific step.
+-   ✍️ **Rename & Organize**: Give your snapshots meaningful names like "Initial refactor".
+-   ⏪ **Granular Rollback**: Revert a single file or an entire snapshot's history.
+-   💥 **Full Reset**: Discard all snapshots and revert all files back to `HEAD`.
+-   🧹 **Clean Up**: Clear all snapshot history while keeping your current code changes.
 
-*   `Workspace Snapshots: Create New Snapshot`: Creates a snapshot from all current changes.
-*   `Workspace Snapshots: Discard Snapshot`: Removes a selected snapshot.
-*   `Workspace Snapshots: Discard All Snapshots`: Removes all snapshots and reverts files.
-*   `Workspace Snapshots: Refresh`: Refreshes the snapshot view.
+---
 
-This is a proof-of-concept extension.
+### 🚀 How to Use
+
+1.  **Open the View**: Find the **Workspace Snapshots** icon in the Activity Bar.
+2.  **Write Code**: Create, edit, or delete files.
+3.  **Take a Snapshot**: Click the **`+`** icon in the view header.
+4.  **Review Diffs**: Expand a snapshot to see changed files (`U`n-tracked, `M`odified, `D`eleted). Click any file to view its diff.
+5.  **Iterate**: Keep coding and taking snapshots to build a step-by-step history of your work!
+
+---
+
+**Note**: All snapshot data is stored locally in your project's `.vscode/workspace_snapshots` folder. This extension **never** touches your Git commit history.

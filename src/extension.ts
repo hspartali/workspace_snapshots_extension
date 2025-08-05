@@ -84,13 +84,26 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.discard', async (snapshot: Snapshot) => {
         const confirm = await vscode.window.showWarningMessage(
-            `Are you sure you want to remove all changes from snapshot "${snapshot.label}"? This will not revert your working files, but will rewrite this snapshot's history. This is not reversible.`,
+            `Are you sure you want to discard all changes from snapshot "${snapshot.label}"? This will not revert your working files, but will rewrite this snapshot's history. This is not reversible.`,
             { modal: true },
             'Remove All Changes'
         );
         if (confirm === 'Remove All Changes') {
             await snapshotProvider.discardSnapshot(snapshot.id);
             vscode.window.showInformationMessage(`Removed all changes from snapshot "${snapshot.label}".`);
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.rename', async (snapshot: Snapshot) => {
+        const newName = await vscode.window.showInputBox({
+            prompt: 'Enter the new name for the snapshot',
+            value: snapshot.label
+        });
+
+        if (newName && newName !== snapshot.label) {
+            snapshotProvider.renameSnapshot(snapshot.id, newName);
+            snapshotProvider.refresh();
+            vscode.window.showInformationMessage(`Snapshot renamed to "${newName}".`);
         }
     }));
 

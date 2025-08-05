@@ -40,6 +40,11 @@
         "icon": "$(discard)"
       },
       {
+        "command": "workspace_snapshots.rename",
+        "title": "Rename Snapshot",
+        "icon": "$(edit)"
+      },
+      {
         "command": "workspace_snapshots.discardAll",
         "title": "Discard All Snapshots",
         "icon": "$(discard)"
@@ -68,7 +73,7 @@
       "workspace-snapshots-container": [
         {
           "id": "workspaceSnapshotsView",
-          "name": "Snapshots",
+          "name": "",
           "icon": "$(device-camera)",
           "contextualTitle": "Workspace Snapshots"
         }
@@ -76,42 +81,47 @@
     },
     "menus": {
       "view/title": [
-        {
-          "command": "workspace_snapshots.snapshot",
+                {
+          "command": "workspace_snapshots.clearAllSnapshots",
           "when": "view == workspaceSnapshotsView",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "workspace_snapshots.discardAll",
           "when": "view == workspaceSnapshotsView",
-          "group": "navigation"
-        },
-        {
-          "command": "workspace_snapshots.clearAllSnapshots",
-          "when": "view == workspaceSnapshotsView",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "workspace_snapshots.refresh",
           "when": "view == workspaceSnapshotsView",
-          "group": "navigation"
+          "group": "navigation@3"
+        },
+        {
+          "command": "workspace_snapshots.snapshot",
+          "when": "view == workspaceSnapshotsView",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
         {
-          "command": "workspace_snapshots.discard",
-          "when": "view == workspaceSnapshotsView && viewItem == snapshot",
+          "command": "workspace_snapshots.rename",
+          "when": "view == workspaceSnapshotsView && viewItem == 'snapshot'",
           "group": "inline@1"
         },
         {
-            "command": "workspace_snapshots.discardFile",
-            "when": "view == workspaceSnapshotsView && viewItem =~ /^snapshotFile/",
-            "group": "inline@1"
+          "command": "workspace_snapshots.discard",
+          "when": "view == workspaceSnapshotsView && viewItem == 'snapshot'",
+          "group": "inline@2"
         },
         {
-            "command": "workspace_snapshots.openFile",
-            "when": "view == workspaceSnapshotsView && viewItem == 'snapshotFile'",
-            "group": "inline@1"
+          "command": "workspace_snapshots.discardFile",
+          "when": "view == workspaceSnapshotsView && viewItem =~ /^snapshotFile/",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspace_snapshots.openFile",
+          "when": "view == workspaceSnapshotsView && viewItem == 'snapshotFile'",
+          "group": "inline@1"
         }
       ]
     }

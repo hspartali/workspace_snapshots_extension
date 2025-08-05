@@ -97,6 +97,14 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         fs.writeFileSync(this.getMetadataPath(), JSON.stringify(snapshotsData, null, 2));
     }
 
+    public renameSnapshot(snapshotId: string, newLabel: string): void {
+        const snapshot = this.getSnapshotById(snapshotId);
+        if (snapshot) {
+            (snapshot as any).label = newLabel; // Writable version of label
+            this.saveMetadata();
+        }
+    }
+
     public isLastChangeForFile(file: SnapshotFile): boolean {
         const targetSnapshotIndex = this.snapshots.findIndex(l => l.id === file.snapshot.id);
         if (targetSnapshotIndex === -1) {
