@@ -8,7 +8,7 @@ interface LayerData {
     id: string;
     label: string;
     timestamp: number;
-    changedFiles: string[];
+    changedFiles: { path: string, status: 'A' | 'M' | 'D' }[];
 }
 
 export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile> {
@@ -66,8 +66,17 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
                 return;
             }
             const metadataContent = fs.readFileSync(this.getMetadataPath(), 'utf-8');
-            const layersData: LayerData[] = JSON.parse(metadataContent);
-            this.layers = layersData.map(data => new Layer(data.label, data.id, data.timestamp, data.changedFiles));
+            const layersData: any[] = JSON.parse(metadataContent);
+            this.layers = layersData.map(data => {
+                const changedFiles = data.changedFiles.map((file: any) => {
+                    if (typeof file === 'string') {
+                        // Backwards compatibility for old metadata format
+                        return { path: file, status: 'M' };
+                    }
+                    return file;
+                });
+                return new Layer(data.label, data.id, data.timestamp, changedFiles);
+            });
             this.layers.sort((a, b) => a.timestamp - b.timestamp);
         } catch (error) {
             console.error("Failed to load layers metadata", error);
@@ -90,45 +99,85 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
 
     // --- Core Functionality ---
 
+    private async getPreviousState(filePath: string): Promise<{ content: string | null, existed: boolean }> {
+        // Search backwards from the last layer to find the most recent state of the file
+        for (let i = this.layers.length - 1; i >= 0; i--) {
+            const layer = this.layers[i];
+            const change = layer.changedFiles.find(f => f.path === filePath);
+            if (change) {
+                // We found the last time this file was changed in a layer
+                if (change.status === 'D') {
+                    // It was deleted, so it didn't exist before the current changes.
+                    return { content: null, existed: false };
+                }
+                // It was Added or Modified, so its content is in this layer's snapshot.
+                const snapshotPath = path.join(this.getSnapshotsRootPath(), layer.id, filePath);
+                if (fs.existsSync(snapshotPath)) {
+                    return { content: fs.readFileSync(snapshotPath, 'utf-8'), existed: true };
+                }
+                // This case (A/M change without a snapshot) would indicate a problem,
+                // but we'll treat it as if the file didn't exist.
+                return { content: null, existed: false };
+            }
+        }
+
+        // If the file was never seen in any layer, its state is determined by HEAD.
+        const existedAtHead = await this.git.fileExistsAtHead(filePath);
+        if (existedAtHead) {
+            const content = await this.git.getFileContentAtHead(filePath);
+            return { content, existed: true };
+        }
+
+        // If not in layers and not in HEAD, it didn't exist.
+        return { content: null, existed: false };
+    }
+
     async createLayer(label: string): Promise<void> {
         await this.git.checkIsRepo();
-        const changedFiles = await this.git.getChangedFiles(); // Get all changed files in workdir
-        const filesToSnapshot: string[] = [];
+        // Get a reliable list of all files that are new, modified, or deleted.
+        const potentiallyChangedFiles = await this.git.getPotentiallyChangedFiles();
+        const filesToSnapshot: { path: string, status: 'A' | 'M' | 'D' }[] = [];
 
-        const lastLayer = this.layers[this.layers.length - 1];
+        if (potentiallyChangedFiles.length === 0) {
+            throw new Error('No changes detected to create a layer from.');
+        }
+
         const newLayerId = Date.now().toString();
         const newLayerSnapshotPath = path.join(this.getSnapshotsRootPath(), newLayerId);
         fs.mkdirSync(newLayerSnapshotPath, { recursive: true });
 
-        for (const file of changedFiles) {
-            const currentFilePath = path.join(this.getWorkspaceRoot(), file);
-            if (!fs.existsSync(currentFilePath)) continue; // Skip deleted files for now
-            
-            const currentContent = fs.readFileSync(currentFilePath, 'utf-8');
-            let previousContent: string;
+        for (const file of potentiallyChangedFiles) {
+            const workspaceFilePath = path.join(this.getWorkspaceRoot(), file);
+            const fileCurrentlyExists = fs.existsSync(workspaceFilePath);
+            const currentContent = fileCurrentlyExists ? fs.readFileSync(workspaceFilePath, 'utf-8') : null;
 
-            if (!lastLayer) { // First layer, compare against HEAD
-                previousContent = await this.git.getFileContentAtHead(file);
-            } else { // Subsequent layer, compare against previous snapshot
-                const prevSnapshotPath = path.join(this.getSnapshotsRootPath(), lastLayer.id, file);
-                if (fs.existsSync(prevSnapshotPath)) {
-                    previousContent = fs.readFileSync(prevSnapshotPath, 'utf-8');
-                } else {
-                    // File was not in the last layer, so compare to HEAD
-                    previousContent = await this.git.getFileContentAtHead(file);
+            const { content: previousContent, existed: fileExistedBefore } = await this.getPreviousState(file);
+
+            if (fileCurrentlyExists) {
+                if (!fileExistedBefore) {
+                    // State change: Non-existent -> Existent. This is an ADDITION.
+                    filesToSnapshot.push({ path: file, status: 'A' });
+                    const destPath = path.join(newLayerSnapshotPath, file);
+                    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+                    fs.writeFileSync(destPath, currentContent!);
+                } else if (currentContent !== previousContent) {
+                    // State change: Existent -> Existent (but different content). This is a MODIFICATION.
+                    filesToSnapshot.push({ path: file, status: 'M' });
+                    const destPath = path.join(newLayerSnapshotPath, file);
+                    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+                    fs.writeFileSync(destPath, currentContent!);
                 }
-            }
-
-            if (currentContent !== previousContent) {
-                filesToSnapshot.push(file);
-                const destPath = path.join(newLayerSnapshotPath, file);
-                fs.mkdirSync(path.dirname(destPath), { recursive: true });
-                fs.writeFileSync(destPath, currentContent);
+            } else { // File does not currently exist in the workspace.
+                if (fileExistedBefore) {
+                    // State change: Existent -> Non-existent. This is a DELETION.
+                    filesToSnapshot.push({ path: file, status: 'D' });
+                    // No snapshot file is written for deletions.
+                }
             }
         }
 
         if (filesToSnapshot.length === 0) {
-            throw new Error('No changes detected since the last layer or HEAD.');
+            throw new Error('No effective changes detected since the last layer or HEAD.');
         }
 
         const newLayer = new Layer(label, newLayerId, parseInt(newLayerId, 10), filesToSnapshot);
@@ -171,37 +220,45 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
     async revertFile(file: LayerFile) {
         const targetLayerIndex = this.layers.findIndex(l => l.id === file.layer.id);
         const previousLayer = targetLayerIndex > 0 ? this.layers[targetLayerIndex - 1] : null;
-        
-        let contentToRevertTo: string;
+        const workspaceFilePath = path.join(this.getWorkspaceRoot(), file.label);
+
         if (previousLayer) {
             const previousSnapshotPath = path.join(this.getSnapshotsRootPath(), previousLayer.id, file.label);
-            if (!fs.existsSync(previousSnapshotPath)) {
-                // If the file didn't exist in the previous layer, it means it was created in the target layer.
-                // Reverting means deleting it from the working directory.
-                fs.unlinkSync(path.join(this.getWorkspaceRoot(), file.label));
-                return;
+            if (fs.existsSync(previousSnapshotPath)) {
+                const contentToRevertTo = fs.readFileSync(previousSnapshotPath, 'utf-8');
+                fs.writeFileSync(workspaceFilePath, contentToRevertTo);
+            } else {
+                // File didn't exist in previous layer, so it was added in this one. Reverting means deleting.
+                if (fs.existsSync(workspaceFilePath)) {
+                    fs.unlinkSync(workspaceFilePath);
+                }
             }
-            contentToRevertTo = fs.readFileSync(previousSnapshotPath, 'utf-8');
         } else {
-            // Reverting the first layer means reverting to HEAD
-            contentToRevertTo = await this.git.getFileContentAtHead(file.label);
+            // Reverting the first layer means reverting to HEAD state.
+            if (await this.git.fileExistsAtHead(file.label)) {
+                const contentToRevertTo = await this.git.getFileContentAtHead(file.label);
+                fs.writeFileSync(workspaceFilePath, contentToRevertTo);
+            } else {
+                // File didn't exist at HEAD, so it was added in this layer. Reverting is deletion.
+                if (fs.existsSync(workspaceFilePath)) {
+                    fs.unlinkSync(workspaceFilePath);
+                }
+            }
         }
-
-        fs.writeFileSync(path.join(this.getWorkspaceRoot(), file.label), contentToRevertTo);
     }
-    
+
     async discardLayer(layerId: string): Promise<void> {
         const layerIndex = this.layers.findIndex(l => l.id === layerId);
-        if (layerIndex === -1) return;
-        
-        if(layerIndex < this.layers.length - 1) {
+        if (layerIndex === -1) { return; }
+
+        if (layerIndex < this.layers.length - 1) {
             throw new Error('For safety, only the most recent layer can be discarded.');
         }
 
         const layerToDiscard = this.layers[layerIndex];
         // Revert all files in the discarded layer
-        for (const file of layerToDiscard.changedFiles) {
-            await this.revertFile(new LayerFile(file, layerToDiscard));
+        for (const fileChange of layerToDiscard.changedFiles) {
+            await this.revertFile(new LayerFile(fileChange.path, fileChange.status, layerToDiscard));
         }
 
         // Delete snapshot directory
@@ -217,7 +274,7 @@ export class LayerProvider implements vscode.TreeDataProvider<Layer | LayerFile>
 
     async discardAllLayers(): Promise<void> {
         // Get a unique list of all files affected by any layer.
-        const allChangedFiles = Array.from(new Set(this.layers.flatMap(l => l.changedFiles)));
+        const allChangedFiles = Array.from(new Set(this.layers.flatMap(l => l.changedFiles.map(f => f.path))));
 
         if (allChangedFiles.length > 0) {
             // Use git's native checkout command to discard all changes.

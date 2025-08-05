@@ -48,11 +48,25 @@ export class Git {
         }
     }
 
-    public async getChangedFiles(): Promise<string[]> {
-        // This gets all changed files (staged and unstaged)
-        const output = await this.execute('git diff --name-only HEAD');
+    public async getPotentiallyChangedFiles(): Promise<string[]> {
+        // This command lists all files that are deleted, modified, or untracked, while respecting .gitignore.
+        // It provides a simple, reliable list of all files that could be part of a new layer.
+        const output = await this.execute('git ls-files --deleted --modified --others --exclude-standard');
         const trimmedOutput = output.trim();
-        return trimmedOutput ? trimmedOutput.split('\n') : [];
+        const files = trimmedOutput ? trimmedOutput.split('\n') : [];
+        // Use a Set to remove any potential duplicates from the git command output in edge cases.
+        return [...new Set(files)];
+    }
+
+    public async fileExistsAtHead(filePath: string): Promise<boolean> {
+        try {
+            // Use a command that has a quiet output and relies on exit code
+            await this.execute(`git cat-file -e HEAD:"${filePath}"`);
+            return true;
+        } catch (error) {
+            // Command fails if the file doesn't exist at HEAD
+            return false;
+        }
     }
 
     public async getFileContentAtHead(filePath: string): Promise<string> {

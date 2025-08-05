@@ -1,18 +1,26 @@
----APPLIED AT 2025-08-04 17:29:59---
+---APPLIED AT 2025-08-05 09:31:18---
 CHANGE 1:
-File: src/Layer.ts
-Start line: 31
-# Before
-        super(path.basename(label), vscode.TreeItemCollapsibleState.None);
-        this.description = path.dirname(label);
-        this.resourceUri = vscode.Uri.file(path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, label));
-        this.command = {
-            command: 'changelayers.showDiff',
+File: src/Git.ts
+Start line: 51
+# Before 
+    public async getPotentiallyChangedFiles(): Promise<string[]> {
+        // This command lists all files that are deleted, modified, or untracked, while respecting .gitignore.
+        // It provides a simple, reliable list of all files that could be part of a new layer.
+        const output = await this.execute('git ls-files --deleted --modified --others --exclude-standard');
+        const trimmedOutput = output.trim();
+        return trimmedOutput ? trimmedOutput.split('\n') : [];
+    }
+
+    public async fileExistsAtHead(filePath: string): Promise<boolean> {
 # After
-        super(path.basename(label), vscode.TreeItemCollapsibleState.None);
-        const dirname = path.dirname(label);
-        // Only show the description if it's a real subdirectory, not '.'
-        this.description = dirname === '.' ? '' : dirname;
-        this.resourceUri = vscode.Uri.file(path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, label));
-        this.command = {
-            command: 'changelayers.showDiff',
+    public async getPotentiallyChangedFiles(): Promise<string[]> {
+        // This command lists all files that are deleted, modified, or untracked, while respecting .gitignore.
+        // It provides a simple, reliable list of all files that could be part of a new layer.
+        const output = await this.execute('git ls-files --deleted --modified --others --exclude-standard');
+        const trimmedOutput = output.trim();
+        const files = trimmedOutput ? trimmedOutput.split('\n') : [];
+        // Use a Set to remove any potential duplicates from the git command output in edge cases.
+        return [...new Set(files)];
+    }
+
+    public async fileExistsAtHead(filePath: string): Promise<boolean> {

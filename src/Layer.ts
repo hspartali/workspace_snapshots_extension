@@ -6,7 +6,7 @@ export class Layer extends vscode.TreeItem {
         public readonly label: string,
         public readonly id: string,
         public readonly timestamp: number,
-        public readonly changedFiles: string[],
+        public readonly changedFiles: { path: string, status: 'A' | 'M' | 'D' }[],
     ) {
         super(label, vscode.TreeItemCollapsibleState.Collapsed);
         this.tooltip = `Layer: ${this.label}\nID: ${this.id}`;
@@ -16,7 +16,7 @@ export class Layer extends vscode.TreeItem {
     }
 
     getFiles(): LayerFile[] {
-        return this.changedFiles.map(file => new LayerFile(file, this));
+        return this.changedFiles.map(file => new LayerFile(file.path, file.status, this));
     }
 
     getPreviousLayerName(): string {
@@ -27,6 +27,7 @@ export class Layer extends vscode.TreeItem {
 export class LayerFile extends vscode.TreeItem {
     constructor(
         public readonly label: string,
+        public readonly status: 'A' | 'M' | 'D',
         public readonly layer: Layer
     ) {
         super(path.basename(label), vscode.TreeItemCollapsibleState.None);
@@ -40,6 +41,20 @@ export class LayerFile extends vscode.TreeItem {
             arguments: [this.layer, this.label]
         };
         this.contextValue = 'layerFile';
-        this.iconPath = new vscode.ThemeIcon('code');
+
+        switch (status) {
+            case 'A':
+                this.iconPath = new vscode.ThemeIcon('diff-added');
+                this.tooltip = `Added in layer: ${label}`;
+                break;
+            case 'M':
+                this.iconPath = new vscode.ThemeIcon('diff-modified');
+                this.tooltip = `Modified in layer: ${label}`;
+                break;
+            case 'D':
+                this.iconPath = new vscode.ThemeIcon('diff-removed');
+                this.tooltip = `Deleted in layer: ${label}`;
+                break;
+        }
     }
 }
