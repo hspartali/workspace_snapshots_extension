@@ -182,8 +182,9 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     }
 
     async getDiffUris(item: Snapshot | SnapshotFile): Promise<{ left: vscode.Uri; right: vscode.Uri; title: string } | null> {
-        if (!(item instanceof SnapshotFile)) {
-            // We can only diff individual files.
+        // Check for the properties we need, instead of a strict class instance.
+        // This allows us to re-create diffs from plain objects during the refresh process.
+        if (!item || !('filePath' in item) || !('commitHash' in item) || typeof item.filePath !== 'string' || typeof item.commitHash !== 'string') {
             return null;
         }
 

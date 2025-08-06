@@ -136,9 +136,46 @@ export async function activate(context: vscode.ExtensionContext) {
     }));
 
     const setDiffMode = async (diffAgainstWorkspace: boolean) => {
-        const config = vscode.workspace.getConfiguration('workspaceSnapshots');
-        // The third argument `true` makes it a global setting change.
-        await config.update('diffAgainstWorkspace', diffAgainstWorkspace, true);
+        await vscode.workspace.getConfiguration('workspaceSnapshots').update('diffAgainstWorkspace', diffAgainstWorkspace);
+
+        // Find all snapshot diff tabs and identify the active one.
+        const tabInfos = vscode.window.tabGroups.all.flatMap(group =>
+            group.tabs.flatMap(tab => {
+                if (tab.input instanceof vscode.TabInputTextDiff && tab.input.modified.scheme === 'workspace-snapshot') {
+                    const uri = tab.input.modified;
+                    const query = new URLSearchParams(uri.query);
+                    const commitHash = query.get('commit');
+                    const filePath = uri.path.substring(1);
+
+                    if (commitHash && filePath && commitHash !== 'none') {
+                        // Return an array with one element if it's a match, which flatMap will collect.
+                        return [{ commitHash, filePath, viewColumn: group.viewColumn, tab, isActive: tab.isActive }];
+                    }
+                }
+                // Return an empty array for non-matching tabs, which flatMap will discard.
+                return [];
+            })
+        );
+
+        if (!tabInfos.length) {
+            return;
+        }
+
+        // Close old tabs and re-open them with the new diff mode.
+        const activeTabInfo = tabInfos.find(info => info.isActive);
+        await vscode.window.tabGroups.close(tabInfos.map(info => info.tab));
+
+        for (const info of tabInfos) {
+            const uris = await snapshotProvider.getDiffUris({ commitHash: info.commitHash, filePath: info.filePath } as SnapshotFile);
+            if (uris) {
+                const isTheActiveTab = info === activeTabInfo;
+                await vscode.commands.executeCommand('vscode.diff', uris.left, uris.right, uris.title, {
+                    preview: false,
+                    preserveFocus: !isTheActiveTab, // Only focus the tab that was previously active.
+                    viewColumn: info.viewColumn,
+                });
+            }
+        }
     };
 
     context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.setDiffAgainstWorkspace', () => {
@@ -166,4 +203,4 @@ export async function activate(context: vscode.ExtensionContext) {
     }));
 }
 
-export function deactivate() {}
+export function deactivate() { }
