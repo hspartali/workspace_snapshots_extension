@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as os from 'os';
-import { Git } from './Git';
+import { Commit, Git } from './Git';
 import { Snapshot, SnapshotFile } from './Snapshot';
 
 export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | SnapshotFile> {
@@ -16,6 +16,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     private snapshotNames: Map<string, string> = new Map();
     private restoredSnapshotId: string | null = null;
     private deletedSnapshotIds: Set<string> = new Set();
+    private _commitCache: Map<string, Commit> = new Map();
 
     constructor(private context: vscode.ExtensionContext) {}
 
@@ -132,8 +133,13 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         } else {
             // Get all snapshots (commits)
             const commits = await this.git.getCommits();
+            
+            // Cache the commits for faster lookups later
+            this._commitCache.clear();
+            commits.forEach(c => this._commitCache.set(c.hash, c));
+
             // The first commit is an implementation detail and should not be shown to the user.
-            const userCommits = commits.filter(c => c.message !== "Initial snapshot repository" && !this.deletedSnapshotIds.has(c.hash));
+            const userCommits = commits.filter(c => c.parentHash !== null && !this.deletedSnapshotIds.has(c.hash));
             return userCommits.map((commit, index) => {
                 const customName = this.snapshotNames.get(commit.hash);
                 const isRestored = commit.hash === this.restoredSnapshotId;
@@ -146,6 +152,29 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
 
     // --- Diffing Logic ---
 
+    private findVisibleParentHash(commitHash: string): string | null {
+        let currentCommit = this._commitCache.get(commitHash);
+    
+        while (currentCommit) {
+            const parentHash = currentCommit.parentHash;
+    
+            // Stop if we've reached the beginning of the history.
+            if (!parentHash) {
+                return null;
+            }
+    
+            // If the parent is not in the set of deleted snapshots, we've found our target.
+            if (!this.deletedSnapshotIds.has(parentHash)) {
+                return parentHash;
+            }
+            
+            // The parent was deleted, so continue searching up the tree from the parent.
+            currentCommit = this._commitCache.get(parentHash);
+        }
+    
+        return null;
+    }
+
     async getDiffUris(item: Snapshot | SnapshotFile): Promise<{ left: vscode.Uri; right: vscode.Uri; title: string } | null> {
         if (!(item instanceof SnapshotFile)) {
             // We can only diff individual files.
@@ -154,7 +183,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
 
         const filePath = item.filePath;
         const commitHash = item.commitHash;
-        const parentHash = await this.git.getParentHash(commitHash);
+        const parentHash = this.findVisibleParentHash(commitHash);
 
         // The URI path identifies the file, and the query identifies the version (commit).
         const leftUri = vscode.Uri.from({
@@ -169,19 +198,15 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
             query: `commit=${commitHash}`
         });
 
-        const allCommits = await this.git.getCommits();
         const getSnapshotName = (hash: string | null): string => {
             if (!hash) {
                 return 'Base';
             }
-            // Check for custom name first
             const customName = this.snapshotNames.get(hash);
             if (customName) {
                 return customName;
             }
-            // Fallback to commit message
-            const commit = allCommits.find(c => c.hash === hash);
-            // Final fallback to short hash if something is wrong
+            const commit = this._commitCache.get(hash);
             return commit ? commit.message : hash.substring(0, 7);
         };
 

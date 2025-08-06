@@ -5,6 +5,7 @@ import * as path from 'path';
 
 export interface Commit {
     hash: string;
+    parentHash: string | null;
     message: string;
     author: string;
     date: string;
@@ -69,16 +70,18 @@ export class Git {
 
     public async getCommits(): Promise<Commit[]> {
         try {
-            // Using a custom format to easily parse the log output.
+            // Using a custom format to easily parse the log output, including the parent hash (%P).
             // Commits are listed newest-to-oldest by default.
-            const format = `%H%x1F%s%x1F%an%x1F%ar`; // hash, subject, author name, author date relative
+            const format = `%H%x1F%P%x1F%s%x1F%an%x1F%ar`; // hash, parent hashes, subject, author, date
             const logOutput = await this.execute(`log --pretty=format:"${format}"`);
             if (!logOutput) {
                 return [];
             }
             return logOutput.split('\n').map(line => {
-                const [hash, message, author, date] = line.split('\x1F');
-                return { hash, message, author, date };
+                const [hash, parentHashes, message, author, date] = line.split('\x1F');
+                // A commit can have multiple parents in a merge, but we only care about the first one.
+                const parentHash = parentHashes.split(' ')[0] || null;
+                return { hash, parentHash, message, author, date };
             });
         } catch (error) {
             // If the repo is empty (e.g., just initialized), log will fail.
@@ -99,16 +102,6 @@ export class Git {
                 const [status, filePath] = line.split('\t');
                 return { status: status as 'A' | 'M' | 'D', path: filePath };
             });
-    }
-
-    public async getParentHash(hash: string): Promise<string | null> {
-        try {
-            // Quote the argument to handle the special '^' character on Windows.
-            return await this.execute(`rev-parse "${hash}^"`);
-        } catch (e) {
-            // This fails for the initial commit, which is expected.
-            return null;
-        }
     }
     
     public async show(hash: string, filePath: string): Promise<string> {
