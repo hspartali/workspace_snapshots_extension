@@ -8,3 +8,4 @@ vsc-extension-quickstart.md
 **/test/**
 node_modules/
 webpack/
+.llmmod
