@@ -72,6 +72,10 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
 
     public async createSnapshot(message: string): Promise<void> {
         await this.git.stageAll();
+        const status = await this.git.getStatus();
+        if (!status) {
+            throw new Error("No changes detected since the last snapshot.");
+        }
         await this.git.commit(message);
         
         // Creating a new snapshot invalidates any previously restored state.

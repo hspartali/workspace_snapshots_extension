@@ -68,6 +68,10 @@ export class Git {
         return this.execute('rev-parse HEAD');
     }
 
+    public async getStatus(): Promise<string> {
+        return this.execute('status --porcelain');
+    }
+
     public async getCommits(): Promise<Commit[]> {
         try {
             // Using a custom format to easily parse the log output, including the parent hash (%P).

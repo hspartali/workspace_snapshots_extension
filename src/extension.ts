@@ -44,7 +44,11 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`Snapshot "${snapshotName}" created.`);
             snapshotProvider.refresh();
         } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to create snapshot: ${error.message}`);
+            if (error.message === "No changes detected since the last snapshot.") {
+                vscode.window.showWarningMessage("No changes detected since the last snapshot.");
+            } else {
+                vscode.window.showErrorMessage(`Failed to create snapshot: ${error.message}`);
+            }
         }
     }));
 
