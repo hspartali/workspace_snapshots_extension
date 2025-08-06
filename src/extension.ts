@@ -93,69 +93,29 @@ export function activate(context: vscode.ExtensionContext) {
         }
     }));
 
-    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.discardFile', async (file: SnapshotFile) => {
-        const isLastChange = snapshotProvider.isLastChangeForFile(file);
-
-        let confirm: string | undefined;
-        if (isLastChange) {
-            confirm = await vscode.window.showWarningMessage(
-                `This is the last change to "${file.label}". This action will revert your working file to its previous state and remove the change from this snapshot's history. This cannot be undone.`,
-                { modal: true },
-                'Discard and Revert File'
-            );
-        } else {
-            confirm = await vscode.window.showWarningMessage(
-                `This change to "${file.label}" is superseded by a later snapshot. This action will only remove the change from this snapshot's history and will NOT revert your working file.`,
-                { modal: true },
-                'Remove from History'
-            );
-        }
-
-        if (confirm) { // User confirmed one of the actions
-            await snapshotProvider.discardOrRemoveFileFromSnapshot(file);
-            snapshotProvider.refresh();
-            const message = isLastChange
-                ? `Reverted "${file.label}" and removed it from the snapshot.`
-                : `Removed change to "${file.label}" from snapshot history.`;
-            vscode.window.showInformationMessage(message);
-        }
-    }));
-
-    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.discard', async (snapshot: Snapshot) => {
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.restore', async (snapshot: Snapshot) => {
         const confirm = await vscode.window.showWarningMessage(
-            `Are you sure you want to discard all changes from snapshot "${snapshot.label}"? This will not revert your working files, but will rewrite this snapshot's history. This is not reversible.`,
+            `This will discard all uncommitted changes in your workspace and revert all files to the state of snapshot '${snapshot.label}'. This cannot be undone.`,
             { modal: true },
-            'Remove All Changes'
+            'Restore Snapshot'
         );
-        if (confirm === 'Remove All Changes') {
-            await snapshotProvider.discardSnapshot(snapshot.id);
-            vscode.window.showInformationMessage(`Removed all changes from snapshot "${snapshot.label}".`);
+
+        if (confirm === 'Restore Snapshot') {
+            await snapshotProvider.restoreSnapshot(snapshot.id);
+            vscode.window.showInformationMessage(`Workspace restored to snapshot "${snapshot.label}".`);
         }
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.rename', async (snapshot: Snapshot) => {
         const newName = await vscode.window.showInputBox({
             prompt: 'Enter the new name for the snapshot',
-            value: snapshot.label
+            value: snapshot.originalLabel
         });
 
-        if (newName && newName !== snapshot.label) {
+        if (newName && newName !== snapshot.originalLabel) {
             snapshotProvider.renameSnapshot(snapshot.id, newName);
             snapshotProvider.refresh();
             vscode.window.showInformationMessage(`Snapshot renamed to "${newName}".`);
-        }
-    }));
-
-    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.discardAll', async () => {
-        const confirm = await vscode.window.showWarningMessage(
-            `Are you sure you want to discard ALL snapshots? This is not reversible and will revert your files.`,
-            { modal: true },
-            'Discard All'
-        );
-        if (confirm === 'Discard All') {
-            await snapshotProvider.discardAllSnapshots();
-            snapshotProvider.refresh();
-            vscode.window.showInformationMessage('All snapshots have been discarded and files reverted.');
         }
     }));
 

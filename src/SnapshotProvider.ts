@@ -16,6 +16,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     readonly onDidChangeTreeData: vscode.Event<Snapshot | undefined | null | void> = this._onDidChangeTreeData.event;
 
     private snapshots: Snapshot[] = [];
+    private activeSnapshotId: string | null = null;
 
     constructor(private context: vscode.ExtensionContext, private git: Git) {
         this.loadSnapshotsFromMetadata();
@@ -61,12 +62,20 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
 
     private loadSnapshotsFromMetadata() {
         try {
-            if (!fs.existsSync(this.getMetadataPath())) {
+            const metadataPath = this.getMetadataPath();
+            if (!fs.existsSync(metadataPath)) {
                 this.snapshots = [];
+                this.activeSnapshotId = null;
                 return;
             }
-            const metadataContent = fs.readFileSync(this.getMetadataPath(), 'utf-8');
-            const snapshotsData: any[] = JSON.parse(metadataContent);
+
+            const metadataContent = fs.readFileSync(metadataPath, 'utf-8');
+            const metadata = JSON.parse(metadataContent);
+
+            // Backwards compatibility for projects with the old array-only metadata format
+            const snapshotsData: any[] = Array.isArray(metadata) ? metadata : metadata.snapshots || [];
+            this.activeSnapshotId = Array.isArray(metadata) ? null : metadata.activeSnapshotId || null;
+
             this.snapshots = snapshotsData.map(data => {
                 const changedFiles = data.changedFiles.map((file: any) => {
                     if (typeof file === 'string') {
@@ -75,104 +84,40 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
                     }
                     return file;
                 });
-                return new Snapshot(data.label, data.id, data.timestamp, changedFiles);
+                return new Snapshot(data.label, data.id, data.timestamp, changedFiles, data.id === this.activeSnapshotId);
             });
             this.snapshots.sort((a, b) => a.timestamp - b.timestamp);
         } catch (error) {
             console.error("Failed to load snapshots metadata", error);
             this.snapshots = [];
+            this.activeSnapshotId = null;
         }
     }
 
     private saveMetadata() {
         const snapshotsData = this.snapshots.map(snapshot => ({
             id: snapshot.id,
-            label: snapshot.label,
+            label: snapshot.originalLabel,
             timestamp: snapshot.timestamp,
             changedFiles: snapshot.changedFiles
         }));
+
+        const metadata = {
+            activeSnapshotId: this.activeSnapshotId,
+            snapshots: snapshotsData
+        };
+
         if (!fs.existsSync(this.getSnapshotsRootPath())) {
             fs.mkdirSync(this.getSnapshotsRootPath(), { recursive: true });
         }
-        fs.writeFileSync(this.getMetadataPath(), JSON.stringify(snapshotsData, null, 2));
+        fs.writeFileSync(this.getMetadataPath(), JSON.stringify(metadata, null, 2));
     }
 
     public renameSnapshot(snapshotId: string, newLabel: string): void {
         const snapshot = this.getSnapshotById(snapshotId);
         if (snapshot) {
-            (snapshot as any).label = newLabel; // Writable version of label
+            snapshot.originalLabel = newLabel;
             this.saveMetadata();
-        }
-    }
-
-    public isLastChangeForFile(file: SnapshotFile): boolean {
-        const targetSnapshotIndex = this.snapshots.findIndex(l => l.id === file.snapshot.id);
-        if (targetSnapshotIndex === -1) {
-            return true; // Should not happen, but safer to assume it's the last.
-        }
-        const filePath = file.label;
-        // Search in snapshots *after* the current one.
-        return !this.snapshots
-            .slice(targetSnapshotIndex + 1)
-            .some(l => l.changedFiles.some(f => f.path === filePath));
-    }
-
-    public async discardOrRemoveFileFromSnapshot(file: SnapshotFile): Promise<void> {
-        const isLastChange = this.isLastChangeForFile(file);
-
-        if (isLastChange) {
-            // DISCARD logic: Revert the live file
-            const targetSnapshotIndex = this.snapshots.findIndex(l => l.id === file.snapshot.id);
-            if (targetSnapshotIndex === -1) { return; }
-
-            const filePath = file.label;
-            const { content: previousContent, existed: fileExistedBefore } = await this.getPreviousStateContent(filePath, file.snapshot.id);
-            const workspaceFilePath = path.join(this.getWorkspaceRoot(), filePath);
-
-            if (fileExistedBefore) {
-                // Revert file to previous state
-                const previousStateInfo = this.getPreviousStateInfo(targetSnapshotIndex, filePath);
-                if (previousStateInfo.source === 'head') {
-                    await this.git.checkoutFiles([filePath]);
-                } else {
-                    fs.writeFileSync(workspaceFilePath, previousContent!);
-                }
-            } else {
-                // File didn't exist before, so delete it
-                if (fs.existsSync(workspaceFilePath)) {
-                    fs.unlinkSync(workspaceFilePath);
-                }
-            }
-        }
-
-        // For both cases (discard or remove), remove the file from this snapshot's metadata and snapshot file.
-        this.removeFileFromSnapshotInternal(file);
-
-        this.saveMetadata();
-    }
-
-    private removeFileFromSnapshotInternal(file: SnapshotFile) {
-        const snapshot = this.snapshots.find(l => l.id === file.snapshot.id);
-        if (!snapshot) {
-            return;
-        }
-        const fileIndex = snapshot.changedFiles.findIndex(f => f.path === file.label);
-        if (fileIndex > -1) {
-            snapshot.changedFiles.splice(fileIndex, 1);
-
-            // Also remove the snapshot file to keep storage clean
-            const snapshotFilePath = path.join(this.getSnapshotsRootPath(), snapshot.id, file.label);
-            if (fs.existsSync(snapshotFilePath)) {
-                fs.unlinkSync(snapshotFilePath);
-            }
-
-            // If this was the last file in the snapshot, clean up the snapshot's now-empty directory.
-            if (snapshot.changedFiles.length === 0) {
-                const snapshotDir = path.join(this.getSnapshotsRootPath(), snapshot.id);
-                if (fs.existsSync(snapshotDir)) {
-                    fs.rmSync(snapshotDir, { recursive: true, force: true });
-                }
-            }
         }
     }
 
@@ -259,8 +204,11 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
             throw new Error('No effective changes detected since the last snapshot or HEAD.');
         }
 
-        const newSnapshot = new Snapshot(label, newSnapshotId, parseInt(newSnapshotId, 10), filesToSnapshot);
+        const newSnapshot = new Snapshot(label, newSnapshotId, parseInt(newSnapshotId, 10), filesToSnapshot, false);
         this.snapshots.push(newSnapshot);
+        
+        // Creating a new snapshot invalidates any previously restored state.
+        this.activeSnapshotId = null;
         this.saveMetadata();
     }
 
@@ -341,42 +289,38 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         return { content: null, existed: false };
     }
 
-    async discardSnapshot(snapshotId: string): Promise<void> {
-        const snapshotToDiscard = this.snapshots.find(l => l.id === snapshotId);
-        if (!snapshotToDiscard) { return; }
+    async restoreSnapshot(snapshotId: string): Promise<void> {
+        // 1. Revert the entire workspace to a clean HEAD state.
+        await this.git.revertWorkspaceToHead();
+        
+        // 2. Apply all snapshots sequentially up to the target one.
+        const targetIndex = this.snapshots.findIndex(l => l.id === snapshotId);
+        if (targetIndex === -1) { return; }
 
-        // Clear the list of changed files for this snapshot in the metadata.
-        snapshotToDiscard.changedFiles.splice(0, snapshotToDiscard.changedFiles.length);
+        const snapshotsToApply = this.snapshots.slice(0, targetIndex + 1);
 
-        // Delete the entire snapshot directory for this snapshot to remove all its history.
-        const snapshotDir = path.join(this.getSnapshotsRootPath(), snapshotToDiscard.id);
-        if (fs.existsSync(snapshotDir)) {
-            fs.rmSync(snapshotDir, { recursive: true, force: true });
+        for (const snapshot of snapshotsToApply) {
+            for (const fileChange of snapshot.changedFiles) {
+                const workspacePath = path.join(this.getWorkspaceRoot(), fileChange.path);
+                
+                if (fileChange.status === 'D') {
+                    if (fs.existsSync(workspacePath)) {
+                        fs.unlinkSync(workspacePath);
+                    }
+                } else { // 'A' or 'M'
+                    const snapshotFilePath = path.join(this.getSnapshotsRootPath(), snapshot.id, fileChange.path);
+                    if (fs.existsSync(snapshotFilePath)) {
+                        const content = fs.readFileSync(snapshotFilePath, 'utf-8');
+                        fs.mkdirSync(path.dirname(workspacePath), { recursive: true });
+                        fs.writeFileSync(workspacePath, content);
+                    }
+                }
+            }
         }
 
-        // Save the updated metadata and refresh the view.
-        // The snapshot will now be empty and filtered out by the getChildren method.
+        // 3. Mark this snapshot as the active one and refresh.
+        this.activeSnapshotId = snapshotId;
         this.saveMetadata();
-        this.refresh();
-    }
-
-    async discardAllSnapshots(): Promise<void> {
-        // Get a unique list of all files affected by any snapshot.
-        const allChangedFiles = Array.from(new Set(this.snapshots.flatMap(l => l.changedFiles.map(f => f.path))));
-
-        if (allChangedFiles.length > 0) {
-            // Use git's native checkout command to discard all changes.
-            // This correctly handles line endings and other metadata, resulting in a clean git status.
-            await this.git.checkoutFiles(allChangedFiles);
-        }
-
-        // Delete all snapshots and metadata
-        const snapshotsRoot = this.getSnapshotsRootPath();
-        if (fs.existsSync(snapshotsRoot)) {
-            fs.rmSync(snapshotsRoot, { recursive: true, force: true });
-        }
-
-        this.snapshots = [];
         this.refresh();
     }
 

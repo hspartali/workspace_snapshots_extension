@@ -2,17 +2,29 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 
 export class Snapshot extends vscode.TreeItem {
+    public originalLabel: string;
+
     constructor(
-        public readonly label: string,
+        label: string,
         public readonly id: string,
         public readonly timestamp: number,
         public readonly changedFiles: { path: string, status: 'A' | 'M' | 'D' }[],
+        public readonly isActive: boolean
     ) {
         super(label, vscode.TreeItemCollapsibleState.Collapsed);
-        this.tooltip = `Snapshot: ${this.label}\nID: ${this.id}`;
-        this.description = `${this.changedFiles.length} file(s)`;
+
+        this.originalLabel = label;
         this.contextValue = 'snapshot';
-        this.iconPath = new vscode.ThemeIcon('device-camera');
+
+        if (isActive) {
+            this.description = `(Restored) ${this.changedFiles.length} file(s)`;
+            this.iconPath = new vscode.ThemeIcon('history', new vscode.ThemeColor('list.warningForeground'));
+            this.tooltip = `[RESTORED] Snapshot: ${label}\nID: ${this.id}`;
+        } else {
+            this.description = `${this.changedFiles.length} file(s)`;
+            this.iconPath = new vscode.ThemeIcon('device-camera');
+            this.tooltip = `Snapshot: ${label}\nID: ${this.id}`;
+        }
     }
 
     getFiles(): SnapshotFile[] {

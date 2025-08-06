@@ -86,4 +86,29 @@ export class Git {
         const quotedFiles = files.map(f => `"${f}"`).join(' ');
         await this.execute(`git checkout -- ${quotedFiles}`);
     }
+
+    public async revertWorkspaceToHead(): Promise<void> {
+        // This command reverts all modified/deleted files and removes all untracked files.
+        // It's a comprehensive way to clean the workspace to a fresh HEAD state.
+
+        // 1. Revert all tracked files.
+        const trackedFilesOutput = await this.execute('git ls-files');
+        const trackedFiles = trackedFilesOutput.trim().split('\n').filter(p => p.length > 0);
+        if (trackedFiles.length > 0) {
+            await this.checkoutFiles(trackedFiles);
+        }
+
+        // 2. Delete all untracked files and directories.
+        const untrackedOutput = await this.execute('git ls-files --others --exclude-standard');
+        const untrackedFiles = untrackedOutput.trim().split('\n').filter(p => p.length > 0);
+        
+        const repoRoot = this.getRepoRoot();
+        for (const file of untrackedFiles) {
+            const fullPath = path.join(repoRoot, file);
+            if (fs.existsSync(fullPath)) {
+                // Use rmSync to handle both files and directories.
+                fs.rmSync(fullPath, { recursive: true, force: true });
+            }
+        }
+    }
 }
