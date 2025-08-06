@@ -32,10 +32,6 @@ export async function activate(context: vscode.ExtensionContext) {
         decorationProvider.refresh();
     });
 
-    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.refresh', () => {
-        snapshotProvider.refresh();
-    }));
-
     context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.snapshot', async () => {
         // Generate a snapshot name from the current date and time.
         const snapshotName = new Date().toLocaleString();

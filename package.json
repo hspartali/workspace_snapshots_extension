@@ -27,11 +27,6 @@
         "icon": "$(add)"
       },
       {
-        "command": "workspace_snapshots.refresh",
-        "title": "Refresh",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "workspace_snapshots.showDiff",
         "title": "Show Snapshot Diff"
       },
@@ -86,11 +81,6 @@
           "command": "workspace_snapshots.clearAllSnapshots",
           "when": "view == workspaceSnapshotsView",
           "group": "navigation@1"
-        },
-        {
-          "command": "workspace_snapshots.refresh",
-          "when": "view == workspaceSnapshotsView",
-          "group": "navigation@2"
         },
         {
           "command": "workspace_snapshots.snapshot",
