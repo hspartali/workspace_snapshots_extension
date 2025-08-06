@@ -61,6 +61,20 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     }));
 
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.deleteSnapshot', async (snapshot: Snapshot) => {
+        const snapshotLabel = snapshot.customName || snapshot.commit.message;
+        const confirm = await vscode.window.showWarningMessage(
+            `Are you sure you want to delete the snapshot '${snapshotLabel}'? This cannot be undone.`,
+            { modal: true },
+            'Delete'
+        );
+
+        if (confirm === 'Delete') {
+            snapshotProvider.deleteSnapshot(snapshot.id!);
+            snapshotProvider.refresh();
+        }
+    }));
+
     context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.showDiff', async (item: Snapshot | SnapshotFile) => {
         try {
             const uris = await snapshotProvider.getDiffUris(item);

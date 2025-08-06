@@ -12,11 +12,13 @@ It's perfect for exploratory coding, complex refactors, or just organizing your 
 
 ### ✨ Features
 
--   📸 **Create Snapshots**: One-click checkpoint of all your current file changes.
--   🔍 **Incremental Diffs**: Instantly see what changed in each specific step.
--   ⏪ **Granular Rollback**: Revert all files in your workspace to a previous snapshot.
--   💥 **Full Reset**: Discard all uncommitted changes, reverting all files back to the state of the last snapshot.
--   🧹 **Clean Up**: Clear all snapshot history while keeping your current code changes.
+-   📸 **Instant Snapshots**: One-click checkpoint of all your current file changes, automatically named with the current date and time.
+-   🔍 **Incremental Diffs**: Instantly see what changed between each snapshot.
+-   ✍️ **Rename & Organize**: Right-click any snapshot to give it a more descriptive name.
+-   💡 **Visual Indicators**: The newest and last-restored snapshots are always highlighted with unique icons and labels, so you never lose your place.
+-   ⏪ **Full Rollback**: Revert your entire workspace to the state of any previous snapshot with a single command.
+-   🗑️ **Safe Deletion**: Remove individual snapshots from the view without altering the underlying history.
+-   🧹 **Clean History**: Safely delete all snapshot history without affecting your current workspace files.
 
 ---
 
@@ -24,9 +26,9 @@ It's perfect for exploratory coding, complex refactors, or just organizing your 
 
 1.  **Open the View**: Find the **Workspace Snapshots** icon in the Activity Bar.
 2.  **Write Code**: Create, edit, or delete files.
-3.  **Take a Snapshot**: Click the **`+`** icon in the view header and provide a descriptive name.
-4.  **Review Diffs**: Expand a snapshot to see changed files (`A`dded, `M`odified, `D`eleted). Click any file to view its diff.
-5.  **Iterate**: Keep coding and taking snapshots to build a step-by-step history of your work!
+3.  **Take a Snapshot**: Click the **`+`** icon to instantly create a new snapshot.
+4.  **Review Diffs**: Expand a snapshot to see changed files (`A`dded, `M`odified, `D`eleted). Click any file to view its diff against the previous snapshot.
+5.  **Manage History**: Right-click a snapshot to **Restore** your workspace, **Rename** it for clarity, or **Delete** it from the list.
 
 ---
 

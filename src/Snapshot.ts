@@ -6,7 +6,8 @@ export class Snapshot extends vscode.TreeItem {
     constructor(
         public readonly commit: Commit,
         public readonly customName?: string,
-        public readonly isRestored: boolean = false
+        public readonly isRestored: boolean = false,
+        public readonly isNew: boolean = false
     ) {
         // Use customName if provided, otherwise fall back to commit message
         super(customName || commit.message, vscode.TreeItemCollapsibleState.Collapsed);
@@ -17,9 +18,12 @@ export class Snapshot extends vscode.TreeItem {
 
         if (isRestored) {
             this.description = '(Restored)';
-            this.iconPath = new vscode.ThemeIcon('history');
+            this.iconPath = new vscode.ThemeIcon('verified-filled');
+        } else if (isNew) {
+            this.description = '(New)';
+            this.iconPath = new vscode.ThemeIcon('device-camera');
         } else {
-            this.description = undefined; // Per request, remove the date/time from the description
+            this.description = undefined;
             this.iconPath = new vscode.ThemeIcon('device-camera');
         }
     }

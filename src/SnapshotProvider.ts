@@ -15,6 +15,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     private shadowRepoPath!: string;
     private snapshotNames: Map<string, string> = new Map();
     private restoredSnapshotId: string | null = null;
+    private deletedSnapshotIds: Set<string> = new Set();
 
     constructor(private context: vscode.ExtensionContext) {}
 
@@ -71,6 +72,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     public async createSnapshot(message: string): Promise<void> {
         await this.git.stageAll();
         await this.git.commit(message);
+        
         // Creating a new snapshot invalidates any previously restored state.
         this.restoredSnapshotId = null;
         this.saveMetadata();
@@ -84,6 +86,15 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
 
     public renameSnapshot(commitHash: string, newName: string): void {
         this.snapshotNames.set(commitHash, newName);
+        this.saveMetadata();
+    }
+
+    public deleteSnapshot(commitHash: string): void {
+        this.deletedSnapshotIds.add(commitHash);
+        // If the deleted snapshot was the restored one, clear the restored state.
+        if (this.restoredSnapshotId === commitHash) {
+            this.restoredSnapshotId = null;
+        }
         this.saveMetadata();
     }
 
@@ -122,11 +133,13 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
             // Get all snapshots (commits)
             const commits = await this.git.getCommits();
             // The first commit is an implementation detail and should not be shown to the user.
-            const userCommits = commits.filter(c => c.message !== "Initial snapshot repository");
-            return userCommits.map(commit => {
+            const userCommits = commits.filter(c => c.message !== "Initial snapshot repository" && !this.deletedSnapshotIds.has(c.hash));
+            return userCommits.map((commit, index) => {
                 const customName = this.snapshotNames.get(commit.hash);
                 const isRestored = commit.hash === this.restoredSnapshotId;
-                return new Snapshot(commit, customName, isRestored);
+                // The newest snapshot is always the first one in the default log order.
+                const isNew = userCommits.length > 0 && index === 0;
+                return new Snapshot(commit, customName, isRestored, isNew);
             });
         }
     }
@@ -156,7 +169,26 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
             query: `commit=${commitHash}`
         });
 
-        const title = `${path.basename(filePath)} (${parentHash ? parentHash.substring(0, 7) : 'Base'} ↔ ${commitHash.substring(0, 7)})`;
+        const allCommits = await this.git.getCommits();
+        const getSnapshotName = (hash: string | null): string => {
+            if (!hash) {
+                return 'Base';
+            }
+            // Check for custom name first
+            const customName = this.snapshotNames.get(hash);
+            if (customName) {
+                return customName;
+            }
+            // Fallback to commit message
+            const commit = allCommits.find(c => c.hash === hash);
+            // Final fallback to short hash if something is wrong
+            return commit ? commit.message : hash.substring(0, 7);
+        };
+
+        const leftName = getSnapshotName(parentHash);
+        const rightName = getSnapshotName(commitHash);
+
+        const title = `${path.basename(filePath)} (${leftName} ↔ ${rightName})`;
         
         return { left: leftUri, right: rightUri, title };
     }
@@ -176,10 +208,12 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
                 const data = JSON.parse(content);
                 this.snapshotNames = new Map(Object.entries(data.names || {}));
                 this.restoredSnapshotId = data.restoredSnapshotId || null;
+                this.deletedSnapshotIds = new Set(data.deletedIds || []);
             } catch (e) {
                 console.error("Failed to load snapshot metadata", e);
                 this.snapshotNames = new Map();
                 this.restoredSnapshotId = null;
+                this.deletedSnapshotIds = new Set();
             }
         }
     }
@@ -189,6 +223,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         const data = {
             names: Object.fromEntries(this.snapshotNames),
             restoredSnapshotId: this.restoredSnapshotId,
+            deletedIds: Array.from(this.deletedSnapshotIds),
         };
         fs.writeFileSync(metadataPath, JSON.stringify(data, null, 2));
     }

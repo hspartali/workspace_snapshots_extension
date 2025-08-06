@@ -63,19 +63,16 @@ export class Git {
     public async commit(message: string): Promise<string> {
         // Use --no-verify to bypass any potential user-defined hooks in their global git config
         await this.execute(`commit --no-verify -m "${message.replace(/"/g, '\\"')}"`);
-        return this.getLatestHash();
-    }
-
-    public async getLatestHash(): Promise<string> {
+        // Return the hash of the new commit directly.
         return this.execute('rev-parse HEAD');
     }
 
     public async getCommits(): Promise<Commit[]> {
         try {
             // Using a custom format to easily parse the log output.
-            // The --reverse flag ensures commits are listed oldest-to-newest.
+            // Commits are listed newest-to-oldest by default.
             const format = `%H%x1F%s%x1F%an%x1F%ar`; // hash, subject, author name, author date relative
-            const logOutput = await this.execute(`log --reverse --pretty=format:"${format}"`);
+            const logOutput = await this.execute(`log --pretty=format:"${format}"`);
             if (!logOutput) {
                 return [];
             }
