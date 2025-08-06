@@ -123,46 +123,45 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
 
     // --- Core Functionality ---
 
-    private async getPreviousState(filePath: string): Promise<{ content: string | null, existed: boolean }> {
+    private async getPreviousStateAsBuffer(filePath: string): Promise<{ content: Buffer | null, existed: boolean }> {
         // Search backwards from the last snapshot to find the most recent state of the file
         for (let i = this.snapshots.length - 1; i >= 0; i--) {
             const snapshot = this.snapshots[i];
             const change = snapshot.changedFiles.find(f => f.path === filePath);
             if (change) {
-                // We found the last time this file was changed in a snapshot
                 if (change.status === 'D') {
-                    // It was deleted, so it didn't exist before the current changes.
                     return { content: null, existed: false };
                 }
-                // It was Added or Modified, so its content is in this snapshot's file copy.
                 const snapshotFilePath = path.join(this.getSnapshotsRootPath(), snapshot.id, filePath);
                 if (fs.existsSync(snapshotFilePath)) {
-                    return { content: fs.readFileSync(snapshotFilePath, 'utf-8'), existed: true };
+                    return { content: fs.readFileSync(snapshotFilePath), existed: true };
                 }
-                // This case (A/M change without a file copy) would indicate a problem,
-                // but we'll treat it as if the file didn't exist.
                 return { content: null, existed: false };
             }
         }
 
-        // If the file was never seen in any snapshot, its state is determined by HEAD.
         const existedAtHead = await this.git.fileExistsAtHead(filePath);
         if (existedAtHead) {
-            const content = await this.git.getFileContentAtHead(filePath);
+            const content = await this.git.getFileContentBufferAtHead(filePath);
             return { content, existed: true };
         }
 
-        // If not in snapshots and not in HEAD, it didn't exist.
         return { content: null, existed: false };
     }
 
     async createSnapshot(label: string): Promise<void> {
         await this.git.checkIsRepo();
-        // Get a reliable list of all files that are new, modified, or deleted.
+        // Get a reliable list of all files that are new, modified, or deleted compared to HEAD.
         const potentiallyChangedFiles = await this.git.getPotentiallyChangedFiles();
         const filesToSnapshot: { path: string, status: 'A' | 'M' | 'D' }[] = [];
 
-        if (potentiallyChangedFiles.length === 0) {
+        // We also need to consider files that were changed in the previous snapshot,
+        // as they might have been reverted to their HEAD state, a change that `git ls-files` won't catch.
+        const lastSnapshot = this.snapshots.length > 0 ? this.snapshots[this.snapshots.length - 1] : null;
+        const lastSnapshotFilePaths = lastSnapshot ? lastSnapshot.changedFiles.map(f => f.path) : [];
+        const allFilesToConsider = [...new Set([...potentiallyChangedFiles, ...lastSnapshotFilePaths])];
+
+        if (allFilesToConsider.length === 0) {
             throw new Error('No changes detected to create a snapshot from.');
         }
 
@@ -170,12 +169,12 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         const newSnapshotFilesPath = path.join(this.getSnapshotsRootPath(), newSnapshotId);
         fs.mkdirSync(newSnapshotFilesPath, { recursive: true });
 
-        for (const file of potentiallyChangedFiles) {
+        for (const file of allFilesToConsider) {
             const workspaceFilePath = path.join(this.getWorkspaceRoot(), file);
             const fileCurrentlyExists = fs.existsSync(workspaceFilePath);
-            const currentContent = fileCurrentlyExists ? fs.readFileSync(workspaceFilePath, 'utf-8') : null;
+            const currentContent = fileCurrentlyExists ? fs.readFileSync(workspaceFilePath) : null;
 
-            const { content: previousContent, existed: fileExistedBefore } = await this.getPreviousState(file);
+            const { content: previousContent, existed: fileExistedBefore } = await this.getPreviousStateAsBuffer(file);
 
             if (fileCurrentlyExists) {
                 if (!fileExistedBefore) {
@@ -184,7 +183,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
                     const destPath = path.join(newSnapshotFilesPath, file);
                     fs.mkdirSync(path.dirname(destPath), { recursive: true });
                     fs.writeFileSync(destPath, currentContent!);
-                } else if (currentContent !== previousContent) {
+                } else if (!currentContent!.equals(previousContent!)) {
                     // State change: Existent -> Existent (but different content). This is a MODIFICATION.
                     filesToSnapshot.push({ path: file, status: 'M' });
                     const destPath = path.join(newSnapshotFilesPath, file);
@@ -201,6 +200,10 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         }
 
         if (filesToSnapshot.length === 0) {
+            // If we considered more files but none resulted in an effective change, we must clean up the created snapshot directory.
+            if (fs.existsSync(newSnapshotFilesPath)) {
+                fs.rmSync(newSnapshotFilesPath, { recursive: true, force: true });
+            }
             throw new Error('No effective changes detected since the last snapshot or HEAD.');
         }
 

@@ -71,11 +71,36 @@ export class Git {
 
     public async getFileContentAtHead(filePath: string): Promise<string> {
         try {
-            return await this.execute(`git show HEAD:"${filePath}"`);
+            const buffer = await this.getFileContentBufferAtHead(filePath);
+            return buffer.toString('utf-8');
         } catch (error) {
-            // File likely didn't exist at HEAD, which is a valid state
             return '';
         }
+    }
+
+    public async getFileContentBufferAtHead(filePath: string): Promise<Buffer> {
+        try {
+            // This is the one we'll use for comparison
+            return await this.executeBinary(`git show HEAD:"${filePath}"`);
+        } catch (error) {
+            // File likely didn't exist at HEAD, which is a valid state
+            return Buffer.alloc(0);
+        }
+    }
+
+    private async executeBinary(command: string): Promise<Buffer> {
+        return new Promise((resolve, reject) => {
+            if (!this.repoRoot) {
+                return reject(new Error("Not in a git repository."));
+            }
+            // maxBuffer option is important for potentially large files. 10MB here.
+            exec(command, { cwd: this.repoRoot, encoding: 'buffer', maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+                if (error) {
+                    return reject(new Error(`Git command failed: ${stderr.toString() || error.message}`));
+                }
+                resolve(stdout);
+            });
+        });
     }
 
     public async checkoutFiles(files: string[]): Promise<void> {
