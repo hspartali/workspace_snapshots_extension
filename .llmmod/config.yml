@@ -79,6 +79,7 @@ exclude:
     - ".class"
     - ".flutter-plugins"
     - ".flutter-plugins-dependencies"
+    - ".vsix"
 
   # 🔹 Advanced glob patterns for excluding specific files or types
   # These are checked against the full relative path.

@@ -1,68 +1,54 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { Commit, FileChange } from './Git';
 
 export class Snapshot extends vscode.TreeItem {
-    public originalLabel: string;
-
     constructor(
-        label: string,
-        public readonly id: string,
-        public readonly timestamp: number,
-        public readonly changedFiles: { path: string, status: 'A' | 'M' | 'D' }[],
-        public readonly isActive: boolean
+        public readonly commit: Commit,
     ) {
-        super(label, vscode.TreeItemCollapsibleState.Collapsed);
-
-        this.originalLabel = label;
+        super(commit.message, vscode.TreeItemCollapsibleState.Collapsed);
+        this.id = commit.hash;
+        this.description = commit.date;
+        this.tooltip = `Author: ${commit.author}\nHash: ${commit.hash}`;
         this.contextValue = 'snapshot';
-
-        if (isActive) {
-            this.description = `(Restored) ${this.changedFiles.length} file(s)`;
-            this.iconPath = new vscode.ThemeIcon('history', new vscode.ThemeColor('list.warningForeground'));
-            this.tooltip = `[RESTORED] Snapshot: ${label}\nID: ${this.id}`;
-        } else {
-            this.description = `${this.changedFiles.length} file(s)`;
-            this.iconPath = new vscode.ThemeIcon('device-camera');
-            this.tooltip = `Snapshot: ${label}\nID: ${this.id}`;
-        }
-    }
-
-    getFiles(): SnapshotFile[] {
-        return this.changedFiles.map(file => new SnapshotFile(file.path, file.status, this));
-    }
-
-    getPreviousSnapshotName(): string {
-       return `State before this snapshot`;
+        this.iconPath = new vscode.ThemeIcon('git-commit');
     }
 }
 
 export class SnapshotFile extends vscode.TreeItem {
-    constructor(
-        public readonly label: string,
-        public readonly status: 'A' | 'M' | 'D',
-        public readonly snapshot: Snapshot
-    ) {
-        super(path.basename(label), vscode.TreeItemCollapsibleState.None);
-        const dirname = path.dirname(label);
-        // Only show the description if it's a real subdirectory, not '.'
-        this.description = dirname === '.' ? '' : dirname;
+    public readonly filePath: string;
+    public readonly status: 'A' | 'M' | 'D' | 'R' | 'C';
 
-        // The resourceUri needs to be the full path to the file for VS Code to find the correct file icon.
-        // We also add the snapshotId and file path to the query so our new DecorationProvider can add the U/M/D status.
-        const fullPath = path.join(vscode.workspace.workspaceFolders![0].uri.fsPath, label);
-        this.resourceUri = vscode.Uri.file(fullPath).with({ query: `snapshotId=${snapshot.id}&path=${label}` });
+    constructor(
+        fileChange: FileChange,
+        public readonly commitHash: string,
+        workspaceRoot: string,
+    ) {
+        const filename = path.basename(fileChange.path);
+        const dir = path.dirname(fileChange.path);
+
+        super(filename, vscode.TreeItemCollapsibleState.None);
+        
+        this.filePath = fileChange.path;
+        this.status = fileChange.status;
+        this.description = dir === '.' ? '' : dir;
+        this.contextValue = 'snapshotFile';
+
+        // The resourceUri must be a unique, virtual representation of this specific version of the file.
+        // This prevents conflicts with the on-disk file and ensures the diff command's context is clean.
+        // The path must end with the filename for VS Code to show the correct file icon.
+        this.resourceUri = vscode.Uri.from({
+            scheme: 'workspace-snapshot',
+            // The path itself is not used for data retrieval, but its structure helps with uniqueness and icons.
+            path: `/${this.commitHash}/${this.filePath}`,
+            // The query is used by the decoration provider to get the status.
+            query: `status=${this.status}`
+        });
 
         this.command = {
             command: 'workspace_snapshots.showDiff',
             title: 'Show Snapshot Diff',
-            arguments: [this.snapshot, this.label]
+            arguments: [this]
         };
-
-        // We set a more specific context value for deleted files to control which commands are shown.
-        this.contextValue = status === 'D' ? 'snapshotFile-deleted' : 'snapshotFile';
-
-        // We no longer set iconPath, so VS Code will use the file-type icon from the user's theme.
-        // The status (A, M, D) will be handled by the SnapshotFileDecorationProvider.
-        this.tooltip = `${status === 'A' ? 'Added' : status === 'M' ? 'Modified' : 'Deleted'} in snapshot: ${label}`;
     }
 }

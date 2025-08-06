@@ -1,139 +1,131 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
-import * as path from 'path';
+import { exec, ExecOptions } from 'child_process';
 import * as fs from 'fs';
+import * as path from 'path';
+
+export interface Commit {
+    hash: string;
+    message: string;
+    author: string;
+    date: string;
+}
+
+export interface FileChange {
+    path: string;
+    status: 'A' | 'M' | 'D' | 'R' | 'C';
+}
 
 export class Git {
-    private repoRoot: string | null = null;
+    constructor(
+        private readonly gitDir: string,
+        private readonly workTree: string
+    ) {}
 
-    constructor() {
-        this.findRepoRoot();
-    }
-
-    private async execute(command: string): Promise<string> {
+    private async execute(command: string, options: ExecOptions = {}): Promise<string> {
+        // Essential: All git commands must operate on the shadow repo and user's work tree.
+        const fullCommand = `git --git-dir="${this.gitDir}" --work-tree="${this.workTree}" ${command}`;
+        
         return new Promise((resolve, reject) => {
-            if (!this.repoRoot) {
-                return reject(new Error("Not in a git repository."));
-            }
-            exec(command, { cwd: this.repoRoot }, (error, stdout, stderr) => {
+            exec(fullCommand, options, (error, stdout, stderr) => {
                 if (error) {
-                    return reject(new Error(`Git command failed: ${stderr || error.message}`));
+                    // Combine stderr and error message for a more informative failure message.
+                    const errorMessage = `Git command failed: ${command}\n${stderr}\n${error.message}`;
+                    return reject(new Error(errorMessage));
                 }
-                // Do NOT trim the output here. Trimming can corrupt patch files.
-                // Callers are responsible for processing the raw output.
-                resolve(stdout);
+                resolve(stdout.trim());
             });
         });
     }
 
-    private findRepoRoot() {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length > 0) {
-            this.repoRoot = workspaceFolders[0].uri.fsPath; // Simplification: assumes first folder is root
+    public async init(): Promise<void> {
+        // This is a special case; --git-dir is the directory to create.
+        if (fs.existsSync(this.gitDir)) {
+            return;
         }
+        fs.mkdirSync(this.gitDir, { recursive: true });
+        await this.execute(`init`);
     }
 
-    public getRepoRoot(): string {
-        if (!this.repoRoot) {
-            throw new Error("Could not find git repository root.");
-        }
-        return this.repoRoot;
+    public async configure(): Promise<void> {
+        await this.execute('config user.name "Workspace Snapshots"');
+        await this.execute('config user.email "snapshots@vscode.ext"');
+        await this.execute('config commit.gpgSign false'); // Ensure no GPG signing prompts
     }
 
-    public async checkIsRepo(): Promise<void> {
+    public async createInitialCommit(): Promise<string> {
+        return this.execute('commit --allow-empty -m "Initial snapshot repository"');
+    }
+
+    public async stageAll(): Promise<void> {
+        await this.execute('add -A .');
+    }
+
+    public async commit(message: string): Promise<string> {
+        // Use --no-verify to bypass any potential user-defined hooks in their global git config
+        await this.execute(`commit --no-verify -m "${message.replace(/"/g, '\\"')}"`);
+        return this.getLatestHash();
+    }
+
+    public async getLatestHash(): Promise<string> {
+        return this.execute('rev-parse HEAD');
+    }
+
+    public async getCommits(): Promise<Commit[]> {
         try {
-            await this.execute('git rev-parse --is-inside-work-tree');
+            // Using a custom format to easily parse the log output.
+            const format = `%H%x1F%s%x1F%an%x1F%ar`; // hash, subject, author name, author date relative
+            const logOutput = await this.execute(`log --pretty=format:"${format}"`);
+            if (!logOutput) {
+                return [];
+            }
+            return logOutput.split('\n').map(line => {
+                const [hash, message, author, date] = line.split('\x1F');
+                return { hash, message, author, date };
+            });
         } catch (error) {
-            throw new Error("The current workspace is not a git repository.");
+            // If the repo is empty (e.g., just initialized), log will fail.
+            return [];
         }
     }
 
-    public async getPotentiallyChangedFiles(): Promise<string[]> {
-        // This command lists all files that are deleted, modified, or untracked, while respecting .gitignore.
-        // It provides a simple, reliable list of all files that could be part of a new snapshot.
-        const output = await this.execute('git ls-files --deleted --modified --others --exclude-standard');
-        const trimmedOutput = output.trim();
-        const files = trimmedOutput ? trimmedOutput.split('\n') : [];
-        // Use a Set to remove any potential duplicates from the git command output in edge cases.
-        return [...new Set(files)];
+    public async getChangedFiles(hash: string): Promise<FileChange[]> {
+        // Use `git show` which works for any commit, including the initial one.
+        const diffOutput = await this.execute(`show --name-status --pretty="" ${hash}`);
+        if (!diffOutput) {
+            return [];
+        }
+
+        return diffOutput.split('\n')
+            .filter(line => line.trim()) // Filter out potential empty lines
+            .map(line => {
+                const [status, filePath] = line.split('\t');
+                return { status: status as 'A' | 'M' | 'D', path: filePath };
+            });
     }
 
-    public async fileExistsAtHead(filePath: string): Promise<boolean> {
+    public async getParentHash(hash: string): Promise<string | null> {
         try {
-            // Use a command that has a quiet output and relies on exit code
-            await this.execute(`git cat-file -e HEAD:"${filePath}"`);
-            return true;
-        } catch (error) {
-            // Command fails if the file doesn't exist at HEAD
-            return false;
+            // Quote the argument to handle the special '^' character on Windows.
+            return await this.execute(`rev-parse "${hash}^"`);
+        } catch (e) {
+            // This fails for the initial commit, which is expected.
+            return null;
         }
     }
-
-    public async getFileContentAtHead(filePath: string): Promise<string> {
+    
+    public async show(hash: string, filePath: string): Promise<string> {
         try {
-            const buffer = await this.getFileContentBufferAtHead(filePath);
-            return buffer.toString('utf-8');
-        } catch (error) {
+            return await this.execute(`show ${hash}:"${filePath.replace(/"/g, '\\"')}"`);
+        } catch (e) {
+            // If `git show` fails, it's likely because the file didn't exist in that commit (e.g., added later or deleted before).
             return '';
         }
     }
 
-    public async getFileContentBufferAtHead(filePath: string): Promise<Buffer> {
-        try {
-            // This is the one we'll use for comparison
-            return await this.executeBinary(`git show HEAD:"${filePath}"`);
-        } catch (error) {
-            // File likely didn't exist at HEAD, which is a valid state
-            return Buffer.alloc(0);
-        }
+    public async restore(hash: string): Promise<void> {
+        // This command is the key to non-destructive restores.
+        // It updates the working directory to match the commit, but DOES NOT move HEAD.
+        await this.execute(`restore --source=${hash} --worktree -- .`);
     }
 
-    private async executeBinary(command: string): Promise<Buffer> {
-        return new Promise((resolve, reject) => {
-            if (!this.repoRoot) {
-                return reject(new Error("Not in a git repository."));
-            }
-            // maxBuffer option is important for potentially large files. 10MB here.
-            exec(command, { cwd: this.repoRoot, encoding: 'buffer', maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-                if (error) {
-                    return reject(new Error(`Git command failed: ${stderr.toString() || error.message}`));
-                }
-                resolve(stdout);
-            });
-        });
-    }
-
-    public async checkoutFiles(files: string[]): Promise<void> {
-        if (files.length === 0) {
-            return;
-        }
-        // Quote files to handle paths with spaces
-        const quotedFiles = files.map(f => `"${f}"`).join(' ');
-        await this.execute(`git checkout -- ${quotedFiles}`);
-    }
-
-    public async revertWorkspaceToHead(): Promise<void> {
-        // This command reverts all modified/deleted files and removes all untracked files.
-        // It's a comprehensive way to clean the workspace to a fresh HEAD state.
-
-        // 1. Revert all tracked files.
-        const trackedFilesOutput = await this.execute('git ls-files');
-        const trackedFiles = trackedFilesOutput.trim().split('\n').filter(p => p.length > 0);
-        if (trackedFiles.length > 0) {
-            await this.checkoutFiles(trackedFiles);
-        }
-
-        // 2. Delete all untracked files and directories.
-        const untrackedOutput = await this.execute('git ls-files --others --exclude-standard');
-        const untrackedFiles = untrackedOutput.trim().split('\n').filter(p => p.length > 0);
-        
-        const repoRoot = this.getRepoRoot();
-        for (const file of untrackedFiles) {
-            const fullPath = path.join(repoRoot, file);
-            if (fs.existsSync(fullPath)) {
-                // Use rmSync to handle both files and directories.
-                fs.rmSync(fullPath, { recursive: true, force: true });
-            }
-        }
-    }
 }

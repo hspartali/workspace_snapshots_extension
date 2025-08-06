@@ -1,40 +1,26 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 import { Git } from './Git';
 
 export class ReadonlyContentProvider implements vscode.TextDocumentContentProvider {
-
-    private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
-    readonly onDidChange = this._onDidChange.event;
-
     constructor(private git: Git) {}
 
-    public fireOnDidChange(uri: vscode.Uri) {
-        this._onDidChange.fire(uri);
-    }
-
     async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
+        // The file path is the URI path, and the version is in the query.
         const query = new URLSearchParams(uri.query);
-        // The path in the URI is the exact file path we need, no substring required.
-        const filePath = uri.path;
-        const workspaceRoot = vscode.workspace.workspaceFolders![0].uri.fsPath;
+        const commitHash = query.get('commit');
+        const filePath = uri.path.substring(1); // Remove leading '/'
 
-        if (query.has('head')) {
-            // Content is from HEAD
-            return this.git.getFileContentAtHead(filePath);
+        if (!commitHash || commitHash === 'none' || !filePath) {
+            // If any component is missing, or commit is 'none', return empty content.
+            return '';
         }
 
-        if (query.has('snapshotId')) {
-            // Content is from a snapshot
-            const snapshotId = query.get('snapshotId')!;
-            const snapshotPath = path.join(workspaceRoot, '.vscode', 'workspace_snapshots', snapshotId, filePath);
-            if (fs.existsSync(snapshotPath)) {
-                return fs.readFileSync(snapshotPath, 'utf-8');
-            }
+        try {
+            return await this.git.show(commitHash, filePath);
+        } catch (error: any) {
+            console.error(`Failed to get content for ${filePath} at ${commitHash}: ${error.message}`);
+            // Return empty string if git show fails (e.g., file not in commit)
+            return '';
         }
-        
-        // Return empty string if no content could be found (e.g. file was created new in a snapshot)
-        return '';
     }
 }
