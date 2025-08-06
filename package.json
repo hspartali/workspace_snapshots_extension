@@ -4,7 +4,7 @@
   "description": "Checkpoint and diff uncommitted changes, safely outside your Git history.",
   "version": "1.0.0",
   "license": "MIT",
-  "publisher": "your-publisher-name",
+  "publisher": "hspartali",
   "repository": {
     "type": "git",
     "url": "https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git"

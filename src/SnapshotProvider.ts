@@ -65,7 +65,9 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     }
     
     private getWorkspaceId(workspacePath: string): string {
-        return crypto.createHash('sha256').update(workspacePath).digest('hex');
+        // Truncate the full SHA256 hash to 16 characters for a shorter, yet still highly unique, directory name.
+        // This avoids potential MAX_PATH issues on Windows without a significant risk of collision.
+        return crypto.createHash('sha256').update(workspacePath).digest('hex').substring(0, 16);
     }
 
     // --- Core Functionality ---
