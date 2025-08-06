@@ -5,13 +5,23 @@ import { Commit, FileChange } from './Git';
 export class Snapshot extends vscode.TreeItem {
     constructor(
         public readonly commit: Commit,
+        public readonly customName?: string,
+        public readonly isRestored: boolean = false
     ) {
-        super(commit.message, vscode.TreeItemCollapsibleState.Collapsed);
+        // Use customName if provided, otherwise fall back to commit message
+        super(customName || commit.message, vscode.TreeItemCollapsibleState.Collapsed);
         this.id = commit.hash;
-        this.description = commit.date;
-        this.tooltip = `Author: ${commit.author}\nHash: ${commit.hash}`;
+        // Keep original message in tooltip for reference
+        this.tooltip = `Message: ${commit.message}\nAuthor: ${commit.author}\nHash: ${commit.hash}`;
         this.contextValue = 'snapshot';
-        this.iconPath = new vscode.ThemeIcon('git-commit');
+
+        if (isRestored) {
+            this.description = '(Restored)';
+            this.iconPath = new vscode.ThemeIcon('history');
+        } else {
+            this.description = undefined; // Per request, remove the date/time from the description
+            this.iconPath = new vscode.ThemeIcon('device-camera');
+        }
     }
 }
 

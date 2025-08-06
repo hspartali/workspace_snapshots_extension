@@ -41,6 +41,11 @@
         "icon": "$(history)"
       },
       {
+        "command": "workspace_snapshots.rename",
+        "title": "Rename Snapshot",
+        "icon": "$(edit)"
+      },
+      {
         "command": "workspace_snapshots.clearAllSnapshots",
         "title": "Clear All Snapshots (Keep Current Files)",
         "icon": "$(trash)"
@@ -98,6 +103,11 @@
           "command": "workspace_snapshots.openFile",
           "when": "view == workspaceSnapshotsView && viewItem == 'snapshotFile'",
           "group": "inline@1"
+        },
+        {
+          "command": "workspace_snapshots.rename",
+          "when": "view == workspaceSnapshotsView && viewItem == 'snapshot'",
+          "group": "inline@2"
         }
       ]
     }

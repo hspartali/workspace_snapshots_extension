@@ -37,19 +37,27 @@ export async function activate(context: vscode.ExtensionContext) {
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.snapshot', async () => {
-        const snapshotName = await vscode.window.showInputBox({
-            prompt: 'Enter a name for the new snapshot',
-            placeHolder: 'e.g., "Initial refactor of API module"',
+        // Generate a snapshot name from the current date and time.
+        const snapshotName = new Date().toLocaleString();
+        try {
+            await snapshotProvider.createSnapshot(snapshotName);
+            vscode.window.showInformationMessage(`Snapshot "${snapshotName}" created.`);
+            snapshotProvider.refresh();
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Failed to create snapshot: ${error.message}`);
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.rename', async (snapshot: Snapshot) => {
+        const currentName = snapshot.customName || snapshot.commit.message;
+        const newName = await vscode.window.showInputBox({
+            prompt: 'Enter the new name for the snapshot',
+            value: currentName
         });
 
-        if (snapshotName) {
-            try {
-                await snapshotProvider.createSnapshot(snapshotName);
-                vscode.window.showInformationMessage(`Snapshot "${snapshotName}" created.`);
-                snapshotProvider.refresh();
-            } catch (error: any) {
-                vscode.window.showErrorMessage(`Failed to create snapshot: ${error.message}`);
-            }
+        if (newName && newName !== currentName) {
+            snapshotProvider.renameSnapshot(snapshot.id!, newName);
+            snapshotProvider.refresh();
         }
     }));
 

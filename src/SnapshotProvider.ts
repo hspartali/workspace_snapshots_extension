@@ -13,6 +13,8 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     public git!: Git;
     public workspaceRoot!: string;
     private shadowRepoPath!: string;
+    private snapshotNames: Map<string, string> = new Map();
+    private restoredSnapshotId: string | null = null;
 
     constructor(private context: vscode.ExtensionContext) {}
 
@@ -21,6 +23,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     public async initialize(): Promise<void> {
         this.workspaceRoot = this.getWorkspaceRoot();
         this.validateWorkspacePath();
+        this.loadMetadata();
 
         const workspaceId = this.getWorkspaceId(this.workspaceRoot);
         this.shadowRepoPath = path.join(this.context.globalStorageUri.fsPath, workspaceId);
@@ -29,11 +32,13 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
 
         if (!fs.existsSync(path.join(this.shadowRepoPath, 'config'))) {
             await this.git.init();
-            await this.git.configure();
-            await this.applyExclusions();
             await this.git.createInitialCommit();
             vscode.window.showInformationMessage("Initialized new snapshot repository for this workspace.");
         }
+
+        // Always ensure configuration and exclusions are set, making initialization resilient.
+        await this.git.configure();
+        await this.applyExclusions();
     }
 
     private getWorkspaceRoot(): string {
@@ -66,17 +71,31 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     public async createSnapshot(message: string): Promise<void> {
         await this.git.stageAll();
         await this.git.commit(message);
+        // Creating a new snapshot invalidates any previously restored state.
+        this.restoredSnapshotId = null;
+        this.saveMetadata();
     }
 
     public async restoreSnapshot(hash: string): Promise<void> {
         await this.git.restore(hash);
+        this.restoredSnapshotId = hash;
+        this.saveMetadata();
+    }
+
+    public renameSnapshot(commitHash: string, newName: string): void {
+        this.snapshotNames.set(commitHash, newName);
+        this.saveMetadata();
     }
 
     public async clearAllSnapshots(): Promise<void> {
         if (fs.existsSync(this.shadowRepoPath)) {
             await fs.promises.rm(this.shadowRepoPath, { recursive: true, force: true });
         }
-        // Re-initialize for immediate use
+        const metadataPath = this.getMetadataPath();
+        if (fs.existsSync(metadataPath)) {
+            await fs.promises.rm(metadataPath, { recursive: true, force: true });
+        }
+        // Re-initialize for immediate use, which will clear the in-memory state.
         await this.initialize();
     }
 
@@ -104,7 +123,11 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
             const commits = await this.git.getCommits();
             // The first commit is an implementation detail and should not be shown to the user.
             const userCommits = commits.filter(c => c.message !== "Initial snapshot repository");
-            return userCommits.map(commit => new Snapshot(commit));
+            return userCommits.map(commit => {
+                const customName = this.snapshotNames.get(commit.hash);
+                const isRestored = commit.hash === this.restoredSnapshotId;
+                return new Snapshot(commit, customName, isRestored);
+            });
         }
     }
 
@@ -136,6 +159,38 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         const title = `${path.basename(filePath)} (${parentHash ? parentHash.substring(0, 7) : 'Base'} ↔ ${commitHash.substring(0, 7)})`;
         
         return { left: leftUri, right: rightUri, title };
+    }
+
+    // --- Metadata Storage ---
+
+    private getMetadataPath(): string {
+        const workspaceId = this.getWorkspaceId(this.workspaceRoot);
+        return path.join(this.context.globalStorageUri.fsPath, `${workspaceId}-metadata.json`);
+    }
+
+    private loadMetadata(): void {
+        const metadataPath = this.getMetadataPath();
+        if (fs.existsSync(metadataPath)) {
+            try {
+                const content = fs.readFileSync(metadataPath, 'utf-8');
+                const data = JSON.parse(content);
+                this.snapshotNames = new Map(Object.entries(data.names || {}));
+                this.restoredSnapshotId = data.restoredSnapshotId || null;
+            } catch (e) {
+                console.error("Failed to load snapshot metadata", e);
+                this.snapshotNames = new Map();
+                this.restoredSnapshotId = null;
+            }
+        }
+    }
+
+    private saveMetadata(): void {
+        const metadataPath = this.getMetadataPath();
+        const data = {
+            names: Object.fromEntries(this.snapshotNames),
+            restoredSnapshotId: this.restoredSnapshotId,
+        };
+        fs.writeFileSync(metadataPath, JSON.stringify(data, null, 2));
     }
 
     // --- Exclusion Management ---
