@@ -135,6 +135,20 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     }));
 
+    const setDiffMode = async (diffAgainstWorkspace: boolean) => {
+        const config = vscode.workspace.getConfiguration('workspaceSnapshots');
+        // The third argument `true` makes it a global setting change.
+        await config.update('diffAgainstWorkspace', diffAgainstWorkspace, true);
+    };
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.setDiffAgainstWorkspace', () => {
+        setDiffMode(true);
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.setDiffAgainstPrevious', () => {
+        setDiffMode(false);
+    }));
+
     context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.openFile', async (file: SnapshotFile) => {
         if (!snapshotProvider.workspaceRoot) {
             vscode.window.showErrorMessage("Could not determine workspace root.");

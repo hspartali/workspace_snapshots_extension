@@ -187,20 +187,6 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
 
         const filePath = item.filePath;
         const commitHash = item.commitHash;
-        const parentHash = this.findVisibleParentHash(commitHash);
-
-        // The URI path identifies the file, and the query identifies the version (commit).
-        const leftUri = vscode.Uri.from({
-            scheme: 'workspace-snapshot',
-            path: `/${filePath}`,
-            query: `commit=${parentHash || 'none'}`
-        });
-
-        const rightUri = vscode.Uri.from({
-            scheme: 'workspace-snapshot',
-            path: `/${filePath}`,
-            query: `commit=${commitHash}`
-        });
 
         const getSnapshotName = (hash: string | null): string => {
             if (!hash) {
@@ -214,8 +200,30 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
             return commit ? commit.message : hash.substring(0, 7);
         };
 
-        const leftName = getSnapshotName(parentHash);
+        const rightUri = vscode.Uri.from({
+            scheme: 'workspace-snapshot',
+            path: `/${filePath}`,
+            query: `commit=${commitHash}`
+        });
         const rightName = getSnapshotName(commitHash);
+
+        let leftUri: vscode.Uri;
+        let leftName: string;
+
+        const diffAgainstWorkspace = vscode.workspace.getConfiguration('workspaceSnapshots').get<boolean>('diffAgainstWorkspace');
+
+        if (diffAgainstWorkspace) {
+            leftUri = vscode.Uri.file(path.join(this.workspaceRoot, filePath));
+            leftName = 'Workspace';
+        } else {
+            const parentHash = this.findVisibleParentHash(commitHash);
+            leftUri = vscode.Uri.from({
+                scheme: 'workspace-snapshot',
+                path: `/${filePath}`,
+                query: `commit=${parentHash || 'none'}`
+            });
+            leftName = getSnapshotName(parentHash);
+        }
 
         const title = `${path.basename(filePath)} (${leftName} ↔ ${rightName})`;
         

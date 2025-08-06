@@ -4,32 +4,41 @@
 
 ![Workspace Snapshots Demo](https://raw.githubusercontent.com/hspartali/workspace_snapshots_extension/main/demo.gif)
 
-Ever wanted to save multiple "versions" of your work before you're ready to commit? Workspace Snapshots lets you create sequential checkpoints of your code, making it easy to track, review, and roll back changes.
+Ever wanted to save multiple "versions" of your work before you're ready to commit? Workspace Snapshots lets you create sequential checkpoints of your code, making it easy to track, review, and roll back changes. It's perfect for exploratory coding, complex refactors, or just organizing your thought process.
 
-It's perfect for exploratory coding, complex refactors, or just organizing your thought process.
+---
+
+### How It Works
+
+Workspace Snapshots creates a private **"shadow" Git repository** for your project, stored safely in VS Code's global extension directory. Every snapshot is a commit in this shadow repo. This means you get the power of Git for your uncommitted work **without ever touching your project's actual `.git` history**.
 
 ---
 
 ### ✨ Features
 
--   📸 **Instant Snapshots**: One-click checkpoint of all your current file changes, automatically named with the current date and time.
--   🔍 **Incremental Diffs**: Instantly see what changed between each snapshot.
--   ✍️ **Rename & Organize**: Right-click any snapshot to give it a more descriptive name.
--   💡 **Visual Indicators**: The newest and last-restored snapshots are always highlighted with unique icons and labels, so you never lose your place.
--   ⏪ **Full Rollback**: Revert your entire workspace to the state of any previous snapshot with a single command.
--   🗑️ **Safe Deletion**: Remove individual snapshots from the view without altering the underlying history.
--   🧹 **Clean History**: Safely delete all snapshot history without affecting your current workspace files.
+-   ✅ **Effortless Checkpoints**: Instantly save the state of all your project files with a single click. The extension automatically detects changes, so you can't accidentally create an empty snapshot.
+
+-   🧠 **Smart Diffs**: Diffs are always relevant. When you delete a snapshot, subsequent diffs automatically re-calculate against the new previous state, keeping your history clean and understandable.
+
+-   ⚙️ **Toggleable Diff Modes**: Instantly switch between two diff modes using the toggle icon in the title bar:
+    -   `$(git-compare)` **Compare to Previous**: See what changed since the last snapshot.
+    -   `$(files)` **Compare to Workspace**: See how a snapshot version differs from your current live file.
+
+-   ⏪ **One-Click Restore**: Revert your entire workspace back to the state of any snapshot. Perfect for abandoning a failed experiment or returning to a known-good state.
+
+-   🛠️ **Full History Management**:
+    -   **Rename**: Give snapshots meaningful names (e.g., "Before Big Refactor") to organize your workflow.
+    -   **Delete**: Safely remove snapshots you no longer need. The history intelligently heals around them.
+    -   **Clear All**: Wipe the entire snapshot history for a workspace with a single command, without affecting your current files.
 
 ---
 
-### 🚀 How to Use
+### ⚙️ Configuration
 
-1.  **Open the View**: Find the **Workspace Snapshots** icon in the Activity Bar.
-2.  **Write Code**: Create, edit, or delete files.
-3.  **Take a Snapshot**: Click the **`+`** icon to instantly create a new snapshot.
-4.  **Review Diffs**: Expand a snapshot to see changed files (`A`dded, `M`odified, `D`eleted). Click any file to view its diff against the previous snapshot.
-5.  **Manage History**: Right-click a snapshot to **Restore** your workspace, **Rename** it for clarity, or **Delete** it from the list.
+The diff mode can be toggled directly from the icon in the view's title bar. This modifies the following setting in your `settings.json`:
+
+-   `workspaceSnapshots.diffAgainstWorkspace` (boolean, default: `false`): Controls the diffing behavior. `false` compares against the previous snapshot, `true` compares against the current workspace file.
 
 ---
 
-**Note**: All snapshot data is stored in a private "shadow" Git repository, located in your global VS Code extension storage directory. This extension **never** touches your project's own Git history.
+**Note**: All snapshot data is stored in a private "shadow" Git repository. This extension **never** touches your project's own Git history.
