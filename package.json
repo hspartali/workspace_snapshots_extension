@@ -2,12 +2,13 @@
   "name": "workspace-snapshots",
   "displayName": "Workspace Snapshots",
   "description": "Checkpoint and diff uncommitted changes, safely outside your Git history.",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "license": "MIT",
   "publisher": "hspartali",
+  "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git"
+    "url": "https://github.com/hspartali/workspace_snapshots_extension.git"
   },
   "engines": {
     "vscode": "^1.80.0"
