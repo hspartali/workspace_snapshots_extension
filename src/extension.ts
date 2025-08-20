@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { SnapshotProvider } from './SnapshotProvider';
-import { Snapshot, SnapshotFile, SeparatorItem } from './Snapshot';
+import { Snapshot, SnapshotFile, SeparatorItem, WorkspaceFileChangeItem } from './Snapshot';
 import { ReadonlyContentProvider } from './ReadonlyContentProvider';
 import { SnapshotFileDecorationProvider } from './SnapshotFileDecorationProvider';
 
@@ -25,7 +25,11 @@ export async function activate(context: vscode.ExtensionContext) {
     const decorationProvider = new SnapshotFileDecorationProvider(snapshotProvider);
 
     context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('workspace-snapshot', readonlyProvider));
-    vscode.window.registerTreeDataProvider('workspaceSnapshotsView', snapshotProvider);
+
+    const treeView = vscode.window.createTreeView('workspaceSnapshotsView', { treeDataProvider: snapshotProvider });
+    context.subscriptions.push(treeView);
+    snapshotProvider.setTreeView(treeView); // Give the provider access to the TreeView
+
     context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorationProvider));
 
     snapshotProvider.onDidChangeTreeData(() => {
@@ -38,7 +42,7 @@ export async function activate(context: vscode.ExtensionContext) {
         try {
             await snapshotProvider.createSnapshot(snapshotName);
             vscode.window.showInformationMessage(`Snapshot "${snapshotName}" created.`);
-            snapshotProvider.refresh();
+            await snapshotProvider.refresh();
         } catch (error: any) {
             if (error.message === "No changes detected since the last snapshot.") {
                 vscode.window.showWarningMessage("No changes detected since the last snapshot.");
@@ -57,7 +61,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (newName && newName !== currentName) {
             snapshotProvider.renameSnapshot(snapshot.id!, newName);
-            snapshotProvider.refresh();
+            await snapshotProvider.refresh();
         }
     }));
 
@@ -71,7 +75,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (confirm === 'Delete') {
             snapshotProvider.deleteSnapshot(snapshot.id!);
-            snapshotProvider.refresh();
+            await snapshotProvider.refresh();
         }
     }));
 
@@ -87,6 +91,18 @@ export async function activate(context: vscode.ExtensionContext) {
                 if (right) {
                     vscode.window.showTextDocument(right.right);
                 }
+            }
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Could not show diff: ${error.message}`);
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.showWorkspaceDiff', async (item: WorkspaceFileChangeItem) => {
+        try {
+            const uris = await snapshotProvider.getWorkspaceDiffUris(item);
+            if (uris) {
+                const { left, right, title } = uris;
+                await vscode.commands.executeCommand('vscode.diff', left, right, title);
             }
         } catch (error: any) {
             vscode.window.showErrorMessage(`Could not show diff: ${error.message}`);
@@ -110,7 +126,7 @@ export async function activate(context: vscode.ExtensionContext) {
         if (confirm === 'Restore Snapshot') {
             try {
                 await snapshotProvider.restoreSnapshot(snapshot.id);
-                snapshotProvider.refresh();
+                await snapshotProvider.refresh();
                 vscode.window.showInformationMessage(`Workspace restored to snapshot "${snapshotLabel}".`);
             } catch (error: any) {
                 vscode.window.showErrorMessage(`Failed to restore snapshot: ${error.message}`);
@@ -127,7 +143,7 @@ export async function activate(context: vscode.ExtensionContext) {
         if (confirm === 'Clear All') {
             try {
                 await snapshotProvider.clearAllSnapshots();
-                snapshotProvider.refresh();
+                await snapshotProvider.refresh();
                 vscode.window.showInformationMessage('All snapshots have been cleared.');
             } catch (error: any) {
                 vscode.window.showErrorMessage(`Failed to clear snapshots: ${error.message}`);
@@ -210,7 +226,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (separatorName) {
             await snapshotProvider.addSeparator(separatorName);
-            snapshotProvider.refresh();
+            await snapshotProvider.refresh();
         }
     }));
 
@@ -226,7 +242,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (newName && newName !== currentName) {
             snapshotProvider.renameSeparator(separator.snapshotId, newName);
-            snapshotProvider.refresh();
+            await snapshotProvider.refresh();
         }
     }));
 
@@ -241,9 +257,25 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (confirm === 'Delete') {
             snapshotProvider.deleteSeparator(separator.snapshotId);
-            snapshotProvider.refresh();
+            await snapshotProvider.refresh();
         }
     }));
+
+    // Set up a file system watcher to refresh the 'Changes' view automatically.
+    const watcher = vscode.workspace.createFileSystemWatcher('**/*');
+    context.subscriptions.push(watcher);
+
+    // Explicitly define callbacks for the watcher to ensure correct scope.
+    // This will refresh the tree view whenever a file is changed, created, or deleted.
+    watcher.onDidChange(async () => {
+        await snapshotProvider.refresh();
+    });
+    watcher.onDidCreate(async () => {
+        await snapshotProvider.refresh();
+    });
+    watcher.onDidDelete(async () => {
+        await snapshotProvider.refresh();
+    });
 }
 
 export function deactivate() { }

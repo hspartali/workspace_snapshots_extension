@@ -79,3 +79,43 @@ export class SeparatorItem extends vscode.TreeItem {
         this.rawLabel = label;
     }
 }//
+
+export class ChangesItem extends vscode.TreeItem {
+    constructor() {
+        super('Changes', vscode.TreeItemCollapsibleState.Expanded);
+        this.contextValue = 'changesContainer';
+        this.iconPath = new vscode.ThemeIcon('folder-active');
+    }
+}
+
+export class WorkspaceFileChangeItem extends vscode.TreeItem {
+    public readonly filePath: string;
+    public readonly status: 'A' | 'M' | 'D' | 'R' | 'C';
+
+    constructor(
+        fileChange: FileChange,
+        workspaceRoot: string,
+    ) {
+        const filename = path.basename(fileChange.path);
+        const dir = path.dirname(fileChange.path);
+
+        super(filename, vscode.TreeItemCollapsibleState.None);
+
+        this.filePath = fileChange.path;
+        this.status = fileChange.status;
+        this.description = dir === '.' ? '' : dir;
+        this.contextValue = 'workspaceFile';
+
+        this.resourceUri = vscode.Uri.from({
+            scheme: 'workspace-snapshot',
+            path: `/${this.filePath}`, // Path needs to be unique enough for decorations
+            query: `status=${this.status}`
+        });
+
+        this.command = {
+            command: 'workspace_snapshots.showWorkspaceDiff',
+            title: 'Show Changes',
+            arguments: [this]
+        };
+    }
+}

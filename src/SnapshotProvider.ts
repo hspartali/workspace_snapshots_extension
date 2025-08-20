@@ -3,11 +3,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as os from 'os';
-import { Commit, Git } from './Git';
-import { Snapshot, SnapshotFile, SeparatorItem } from './Snapshot';
+import { Commit, FileChange, Git } from './Git';
+import { Snapshot, SnapshotFile, SeparatorItem, ChangesItem, WorkspaceFileChangeItem } from './Snapshot';
 
-export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | SnapshotFile | SeparatorItem> {
-    private _onDidChangeTreeData = new vscode.EventEmitter<Snapshot | undefined | null | void>();
+type TreeItem = Snapshot | SnapshotFile | SeparatorItem | ChangesItem | WorkspaceFileChangeItem;
+
+export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
+    private _onDidChangeTreeData = new vscode.EventEmitter<TreeItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     public git!: Git;
@@ -18,8 +20,13 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     private restoredSnapshotId: string | null = null;
     private deletedSnapshotIds: Set<string> = new Set();
     private _commitCache: Map<string, Commit> = new Map();
+    private treeView?: vscode.TreeView<TreeItem>;
 
     constructor(private context: vscode.ExtensionContext) {}
+
+    public setTreeView(treeView: vscode.TreeView<TreeItem>): void {
+        this.treeView = treeView;
+    }
 
     // --- Initialization & Setup ---
 
@@ -42,6 +49,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         // Always ensure configuration and exclusions are set, making initialization resilient.
         await this.git.configure();
         await this.applyExclusions();
+        await this.refresh();
     }
 
     private getWorkspaceRoot(): string {
@@ -143,59 +151,106 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
 
     // --- Tree Data Provider Implementation ---
 
-    refresh(): void {
+    public async refresh(): Promise<void> {
+        await this.updateBadge();
         this._onDidChangeTreeData.fire();
     }
 
-    getTreeItem(element: Snapshot | SnapshotFile | SeparatorItem): vscode.TreeItem {
+    private async updateBadge(): Promise<void> {
+        if (this.treeView && this.git) {
+            const changes = await this.git.getStatus();
+            const changeCount = changes.length;
+            if (changeCount > 0) {
+                this.treeView.badge = {
+                    value: changeCount,
+                    tooltip: `${changeCount} uncommitted changes`
+                };
+            } else {
+                this.treeView.badge = undefined;
+            }
+        }
+    }
+
+    getTreeItem(element: TreeItem): vscode.TreeItem {
         return element;
     }
 
-    async getChildren(element?: Snapshot | SnapshotFile | SeparatorItem): Promise<(Snapshot | SnapshotFile | SeparatorItem)[]> {
+    async getChildren(element?: TreeItem): Promise<TreeItem[]> {
         try {
             if (!this.git) {
-                console.error("SnapshotProvider.getChildren called before initialization.");
-                vscode.window.showErrorMessage("Workspace Snapshots is not ready. Please try refreshing the view.");
+                // This can happen on startup. Return empty and let the initialization call refresh.
                 return [];
             }
-    
+
             if (element) {
                 if (element instanceof Snapshot) {
                     const files = await this.git.getChangedFiles(element.id!);
                     return files.map(file => new SnapshotFile(file, element.id!, this.workspaceRoot));
                 }
-                return []; // Leaves have no children
+                if (element instanceof ChangesItem) {
+                    const changes = await this.git.getStatus();
+                    return changes.map(change => new WorkspaceFileChangeItem(change, this.workspaceRoot));
+                }
+                return []; // Other elements are leaves
             } else {
                 // Root elements
                 const commits = await this.git.getCommits();
                 this._commitCache.clear();
                 commits.forEach(c => this._commitCache.set(c.hash, c));
-    
                 const userCommits = commits.filter(c => c.parentHash !== null && !this.deletedSnapshotIds.has(c.hash));
-    
-                return userCommits.flatMap((commit, index) => {
+
+                const snapshotItems: (Snapshot | SeparatorItem)[] = userCommits.flatMap((commit, index) => {
                     const results: (Snapshot | SeparatorItem)[] = [];
                     const separatorName = this.separatorNames.get(commit.hash);
                     if (separatorName) {
                         results.push(new SeparatorItem(separatorName, commit.hash));
                     }
-    
+
                     const customName = this.snapshotNames.get(commit.hash);
                     const isRestored = commit.hash === this.restoredSnapshotId;
-                    // With a reversed log, the newest snapshot is the last one in the array.
                     const isNew = userCommits.length > 0 && index === userCommits.length - 1;
                     results.push(new Snapshot(commit, customName, isRestored, isNew));
                     return results;
                 });
+
+                // Add the "Changes" container at the end.
+                const changesItem = new ChangesItem();
+                return [...snapshotItems, changesItem];
             }
         } catch (error: any) {
             console.error("Error providing tree data for Workspace Snapshots:", error);
-            vscode.window.showErrorMessage(`Error loading snapshots: ${error.message}`);
+            // Avoid showing an error message on every refresh, log it instead.
             return [];
         }
     }
 
     // --- Diffing Logic ---
+
+    public async getWorkspaceDiffUris(item: WorkspaceFileChangeItem): Promise<{ left: vscode.Uri; right: vscode.Uri; title: string } | null> {
+        const commits = await this.git.getCommits();
+        const userCommits = commits.filter(c => c.parentHash !== null && !this.deletedSnapshotIds.has(c.hash));
+
+        if (userCommits.length === 0) {
+            vscode.window.showWarningMessage("Cannot diff changes: No snapshots have been created yet.");
+            return null;
+        }
+        
+        const latestCommitHash = userCommits[userCommits.length - 1].hash;
+        const filePath = item.filePath;
+
+        const leftUri = vscode.Uri.from({
+            scheme: 'workspace-snapshot',
+            path: `/${filePath}`,
+            query: `commit=${latestCommitHash}`
+        });
+
+        // The right URI is the actual editable file in the workspace
+        const rightUri = vscode.Uri.file(path.join(this.workspaceRoot, filePath));
+
+        const title = `${path.basename(filePath)} (Latest Snapshot ↔ Workspace)`;
+
+        return { left: leftUri, right: rightUri, title };
+    }
 
     private findVisibleParentHash(commitHash: string): string | null {
         let currentCommit = this._commitCache.get(commitHash);

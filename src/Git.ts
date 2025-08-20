@@ -68,8 +68,28 @@ export class Git {
         return this.execute('rev-parse HEAD');
     }
 
-    public async getStatus(): Promise<string> {
-        return this.execute('status --porcelain');
+    public async getStatus(): Promise<FileChange[]> {
+        const statusOutput = await this.execute('status --porcelain');
+        if (!statusOutput) {
+            return [];
+        }
+
+        return statusOutput.split('\n')
+            .filter(line => line.trim())
+            .map(line => {
+                const statusChar = line.substring(0, 2).trim();
+                const filePath = line.substring(3);
+                // We map staged/unstaged changes to simpler statuses. 'A' for new, 'D' for deleted, 'M' for everything else.
+                let status: 'A' | 'M' | 'D';
+                if (statusChar.startsWith('A') || statusChar === '??') {
+                    status = 'A';
+                } else if (statusChar.startsWith('D')) {
+                    status = 'D';
+                } else {
+                    status = 'M';
+                }
+                return { status, path: filePath };
+            });
     }
 
     public async getCommits(): Promise<Commit[]> {
@@ -104,7 +124,8 @@ export class Git {
             .filter(line => line.trim()) // Filter out potential empty lines
             .map(line => {
                 const [status, filePath] = line.split('\t');
-                return { status: status as 'A' | 'M' | 'D', path: filePath };
+                // Use the full FileChange status type to correctly handle renames, etc.
+                return { status: status.charAt(0) as FileChange['status'], path: filePath };
             });
     }
     

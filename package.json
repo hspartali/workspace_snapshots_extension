@@ -80,6 +80,10 @@
         "command": "workspace_snapshots.deleteSeparator",
         "title": "Delete Separator",
         "icon": "$(trash)"
+      },
+      {
+        "command": "workspace_snapshots.showWorkspaceDiff",
+        "title": "Show Changes"
       }
     ],
     "viewsContainers": {
