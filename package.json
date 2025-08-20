@@ -67,7 +67,7 @@
         "icon": "$(git-compare)"
       },
       {
-        "command": "workspace_snapshots.addSeparatorAtTop",
+        "command": "workspace_snapshots.addSeparator",
         "title": "Add Separator",
         "icon": "$(milestone)"
       },
@@ -119,7 +119,7 @@
           "group": "navigation@2"
         },
         {
-          "command": "workspace_snapshots.addSeparatorAtTop",
+          "command": "workspace_snapshots.addSeparator",
           "when": "view == workspaceSnapshotsView",
           "group": "navigation@3"
         },

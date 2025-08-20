@@ -202,14 +202,14 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     }));
 
-    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.addSeparatorAtTop', async () => {
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.addSeparator', async () => {
         const separatorName = await vscode.window.showInputBox({
             prompt: 'Enter a name for the separator',
             placeHolder: 'e.g., Feature Implementation'
         });
 
         if (separatorName) {
-            await snapshotProvider.addSeparatorAtTop(separatorName);
+            await snapshotProvider.addSeparator(separatorName);
             snapshotProvider.refresh();
         }
     }));

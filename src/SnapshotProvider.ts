@@ -106,11 +106,12 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         this.saveMetadata();
     }
 
-    public async addSeparatorAtTop(name: string): Promise<void> {
+    public async addSeparator(name: string): Promise<void> {
         const commits = await this.git.getCommits();
         const userCommits = commits.filter(c => c.parentHash !== null && !this.deletedSnapshotIds.has(c.hash));
         if (userCommits.length > 0) {
-            const latestCommitHash = userCommits[0].hash;
+            // Get the last commit in the list, which is the newest one with --reverse
+            const latestCommitHash = userCommits[userCommits.length - 1].hash;
             this.separatorNames.set(latestCommitHash, name);
             this.saveMetadata();
         } else {
@@ -181,7 +182,8 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     
                     const customName = this.snapshotNames.get(commit.hash);
                     const isRestored = commit.hash === this.restoredSnapshotId;
-                    const isNew = userCommits.length > 0 && index === 0;
+                    // With a reversed log, the newest snapshot is the last one in the array.
+                    const isNew = userCommits.length > 0 && index === userCommits.length - 1;
                     results.push(new Snapshot(commit, customName, isRestored, isNew));
                     return results;
                 });

@@ -75,9 +75,9 @@ export class Git {
     public async getCommits(): Promise<Commit[]> {
         try {
             // Using a custom format to easily parse the log output, including the parent hash (%P).
-            // Commits are listed newest-to-oldest by default.
+            // Commits are listed newest-to-oldest by default. We use --reverse to show oldest first.
             const format = `%H%x1F%P%x1F%s%x1F%an%x1F%ar`; // hash, parent hashes, subject, author, date
-            const logOutput = await this.execute(`log --pretty=format:"${format}"`);
+            const logOutput = await this.execute(`log --reverse --pretty=format:"${format}"`);
             if (!logOutput) {
                 return [];
             }
