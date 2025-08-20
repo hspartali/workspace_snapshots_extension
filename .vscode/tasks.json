@@ -7,12 +7,41 @@
 			"problemMatcher": [
 				"$tsc"
 			],
+			"group": "build",
+			"label": "npm: compile",
+			"detail": "tsc -p ./",
+			"options": {
+				"shell": {
+					"executable": "cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			}
+		},
+		{
+			"type": "npm",
+			"script": "watch",
+			"problemMatcher": [
+				"$tsc-watch"
+			],
+			"isBackground": true,
 			"group": {
 				"kind": "build",
 				"isDefault": true
 			},
-			"label": "npm: compile",
-			"detail": "tsc -p ./"
+			"label": "npm: watch",
+			"detail": "tsc -watch -p ./",
+			"options": {
+				"shell": {
+					"executable": "cmd.exe",
+					"args": [
+						"/d",
+						"/c"
+					]
+				}
+			}
 		}
 	]
 }

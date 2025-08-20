@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { SnapshotProvider } from './SnapshotProvider';
-import { Snapshot, SnapshotFile } from './Snapshot';
+import { Snapshot, SnapshotFile, SeparatorItem } from './Snapshot';
 import { ReadonlyContentProvider } from './ReadonlyContentProvider';
 import { SnapshotFileDecorationProvider } from './SnapshotFileDecorationProvider';
 
@@ -199,6 +199,49 @@ export async function activate(context: vscode.ExtensionContext) {
             // File might not exist in the workspace (e.g., deleted), which is fine.
             // A more specific error for other cases could be useful.
             console.warn(`Could not open file '${file.label}': ${error.message}`);
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.addSeparatorAtTop', async () => {
+        const separatorName = await vscode.window.showInputBox({
+            prompt: 'Enter a name for the separator',
+            placeHolder: 'e.g., Feature Implementation'
+        });
+
+        if (separatorName) {
+            await snapshotProvider.addSeparatorAtTop(separatorName);
+            snapshotProvider.refresh();
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.renameSeparator', async (separator: SeparatorItem) => {
+        if (!separator || !separator.snapshotId) { return; }
+
+        const currentName = separator.rawLabel;
+
+        const newName = await vscode.window.showInputBox({
+            prompt: 'Enter the new name for the separator',
+            value: currentName
+        });
+
+        if (newName && newName !== currentName) {
+            snapshotProvider.renameSeparator(separator.snapshotId, newName);
+            snapshotProvider.refresh();
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.deleteSeparator', async (separator: SeparatorItem) => {
+        if (!separator || !separator.snapshotId) { return; }
+
+        const confirm = await vscode.window.showWarningMessage(
+            `Are you sure you want to delete the separator '${separator.label}'?`,
+            { modal: true },
+            'Delete'
+        );
+
+        if (confirm === 'Delete') {
+            snapshotProvider.deleteSeparator(separator.snapshotId);
+            snapshotProvider.refresh();
         }
     }));
 }

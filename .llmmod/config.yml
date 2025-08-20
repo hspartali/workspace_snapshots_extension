@@ -52,6 +52,7 @@ exclude:
     - ".llmmod"
 
   # 🔹 File extensions to exclude
+    - ".dart_tool"
   extensions:
     - ".log"
     - ".lock"
@@ -83,6 +84,8 @@ exclude:
 
   # 🔹 Advanced glob patterns for excluding specific files or types
   # These are checked against the full relative path.
+    - ".webp"
+    - ".jar"
   patterns:
     - "*.g.dart"
     - "**/generated_*.py"
@@ -91,6 +94,15 @@ exclude:
 # ============================================================
 # 🛠️  'apply' COMMAND SETTINGS
 # ============================================================
+
+  path_only_patterns:
+    - "pnpm-lock.yaml"
+    - "yarn.lock"
+    - "package-lock.json"
+
+# ============================================================
+# 🛠️  'apply' COMMAND SETTINGS
+# ============================================================
 
 apply_settings:
   # The search radius (in lines) to look for a code block to replace.
@@ -103,3 +115,4 @@ apply_settings:
   # The number of lines to show before and after a match for context
   # during ambiguous match prompts.
   context_lines: 3
+  auto_widen_search: true

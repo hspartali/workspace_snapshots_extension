@@ -66,3 +66,16 @@ export class SnapshotFile extends vscode.TreeItem {
         };
     }
 }
+
+export class SeparatorItem extends vscode.TreeItem {
+    public readonly rawLabel: string;
+
+    constructor(
+        label: string, // The custom name of the separator
+        public readonly snapshotId: string // The ID of the snapshot this separator is attached to.
+    ) {
+        super(`--------- ${label} ---------`, vscode.TreeItemCollapsibleState.None);
+        this.contextValue = 'separator';
+        this.rawLabel = label;
+    }
+}//

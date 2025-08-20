@@ -65,6 +65,21 @@
         "command": "workspace_snapshots.setDiffAgainstPrevious",
         "title": "Diff Against Previous Snapshot",
         "icon": "$(git-compare)"
+      },
+      {
+        "command": "workspace_snapshots.addSeparatorAtTop",
+        "title": "Add Separator",
+        "icon": "$(milestone)"
+      },
+      {
+        "command": "workspace_snapshots.renameSeparator",
+        "title": "Rename Separator",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "workspace_snapshots.deleteSeparator",
+        "title": "Delete Separator",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -104,6 +119,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "workspace_snapshots.addSeparatorAtTop",
+          "when": "view == workspaceSnapshotsView",
+          "group": "navigation@3"
+        },
+        {
           "command": "workspace_snapshots.snapshot",
           "when": "view == workspaceSnapshotsView",
           "group": "navigation@3"
@@ -129,6 +149,16 @@
           "command": "workspace_snapshots.restore",
           "when": "view == workspaceSnapshotsView && viewItem == 'snapshot'",
           "group": "inline@3"
+        },
+        {
+          "command": "workspace_snapshots.renameSeparator",
+          "when": "view == workspaceSnapshotsView && viewItem == 'separator'",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspace_snapshots.deleteSeparator",
+          "when": "view == workspaceSnapshotsView && viewItem == 'separator'",
+          "group": "inline@2"
         }
       ]
     },

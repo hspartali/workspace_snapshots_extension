@@ -4,9 +4,9 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import * as os from 'os';
 import { Commit, Git } from './Git';
-import { Snapshot, SnapshotFile } from './Snapshot';
+import { Snapshot, SnapshotFile, SeparatorItem } from './Snapshot';
 
-export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | SnapshotFile> {
+export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | SnapshotFile | SeparatorItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<Snapshot | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
@@ -14,6 +14,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
     public workspaceRoot!: string;
     private shadowRepoPath!: string;
     private snapshotNames: Map<string, string> = new Map();
+    private separatorNames: Map<string, string> = new Map();
     private restoredSnapshotId: string | null = null;
     private deletedSnapshotIds: Set<string> = new Set();
     private _commitCache: Map<string, Commit> = new Map();
@@ -105,6 +106,28 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         this.saveMetadata();
     }
 
+    public async addSeparatorAtTop(name: string): Promise<void> {
+        const commits = await this.git.getCommits();
+        const userCommits = commits.filter(c => c.parentHash !== null && !this.deletedSnapshotIds.has(c.hash));
+        if (userCommits.length > 0) {
+            const latestCommitHash = userCommits[0].hash;
+            this.separatorNames.set(latestCommitHash, name);
+            this.saveMetadata();
+        } else {
+            vscode.window.showWarningMessage("Cannot add separator: No snapshots found.");
+        }
+    }
+
+    public renameSeparator(commitHash: string, newName: string): void {
+        this.separatorNames.set(commitHash, newName);
+        this.saveMetadata();
+    }
+
+    public deleteSeparator(commitHash: string): void {
+        this.separatorNames.delete(commitHash);
+        this.saveMetadata();
+    }
+
     public async clearAllSnapshots(): Promise<void> {
         if (fs.existsSync(this.shadowRepoPath)) {
             await fs.promises.rm(this.shadowRepoPath, { recursive: true, force: true });
@@ -123,36 +146,50 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         this._onDidChangeTreeData.fire();
     }
 
-    getTreeItem(element: Snapshot | SnapshotFile): vscode.TreeItem {
+    getTreeItem(element: Snapshot | SnapshotFile | SeparatorItem): vscode.TreeItem {
         return element;
     }
 
-    async getChildren(element?: Snapshot): Promise<(Snapshot | SnapshotFile)[] | null | undefined> {
-        if (!this.git) {
-            await this.initialize();
-        }
-        
-        if (element) {
-            // Get changed files for a specific snapshot
-            const files = await this.git.getChangedFiles(element.id!);
-            return files.map(file => new SnapshotFile(file, element.id!, this.workspaceRoot));
-        } else {
-            // Get all snapshots (commits)
-            const commits = await this.git.getCommits();
-            
-            // Cache the commits for faster lookups later
-            this._commitCache.clear();
-            commits.forEach(c => this._commitCache.set(c.hash, c));
-
-            // The first commit is an implementation detail and should not be shown to the user.
-            const userCommits = commits.filter(c => c.parentHash !== null && !this.deletedSnapshotIds.has(c.hash));
-            return userCommits.map((commit, index) => {
-                const customName = this.snapshotNames.get(commit.hash);
-                const isRestored = commit.hash === this.restoredSnapshotId;
-                // The newest snapshot is always the first one in the default log order.
-                const isNew = userCommits.length > 0 && index === 0;
-                return new Snapshot(commit, customName, isRestored, isNew);
-            });
+    async getChildren(element?: Snapshot | SnapshotFile | SeparatorItem): Promise<(Snapshot | SnapshotFile | SeparatorItem)[]> {
+        try {
+            if (!this.git) {
+                console.error("SnapshotProvider.getChildren called before initialization.");
+                vscode.window.showErrorMessage("Workspace Snapshots is not ready. Please try refreshing the view.");
+                return [];
+            }
+    
+            if (element) {
+                if (element instanceof Snapshot) {
+                    const files = await this.git.getChangedFiles(element.id!);
+                    return files.map(file => new SnapshotFile(file, element.id!, this.workspaceRoot));
+                }
+                return []; // Leaves have no children
+            } else {
+                // Root elements
+                const commits = await this.git.getCommits();
+                this._commitCache.clear();
+                commits.forEach(c => this._commitCache.set(c.hash, c));
+    
+                const userCommits = commits.filter(c => c.parentHash !== null && !this.deletedSnapshotIds.has(c.hash));
+    
+                return userCommits.flatMap((commit, index) => {
+                    const results: (Snapshot | SeparatorItem)[] = [];
+                    const separatorName = this.separatorNames.get(commit.hash);
+                    if (separatorName) {
+                        results.push(new SeparatorItem(separatorName, commit.hash));
+                    }
+    
+                    const customName = this.snapshotNames.get(commit.hash);
+                    const isRestored = commit.hash === this.restoredSnapshotId;
+                    const isNew = userCommits.length > 0 && index === 0;
+                    results.push(new Snapshot(commit, customName, isRestored, isNew));
+                    return results;
+                });
+            }
+        } catch (error: any) {
+            console.error("Error providing tree data for Workspace Snapshots:", error);
+            vscode.window.showErrorMessage(`Error loading snapshots: ${error.message}`);
+            return [];
         }
     }
 
@@ -247,11 +284,13 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
                 const content = fs.readFileSync(metadataPath, 'utf-8');
                 const data = JSON.parse(content);
                 this.snapshotNames = new Map(Object.entries(data.names || {}));
+                this.separatorNames = new Map(Object.entries(data.separators || {}));
                 this.restoredSnapshotId = data.restoredSnapshotId || null;
                 this.deletedSnapshotIds = new Set(data.deletedIds || []);
             } catch (e) {
                 console.error("Failed to load snapshot metadata", e);
                 this.snapshotNames = new Map();
+                this.separatorNames = new Map();
                 this.restoredSnapshotId = null;
                 this.deletedSnapshotIds = new Set();
             }
@@ -262,6 +301,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<Snapshot | Snap
         const metadataPath = this.getMetadataPath();
         const data = {
             names: Object.fromEntries(this.snapshotNames),
+            separators: Object.fromEntries(this.separatorNames),
             restoredSnapshotId: this.restoredSnapshotId,
             deletedIds: Array.from(this.deletedSnapshotIds),
         };
