@@ -80,7 +80,7 @@ export class Git {
     }
 
     public async getStatus(): Promise<FileChange[]> {
-        const statusOutput = await this.execute('status --porcelain');
+        const statusOutput = await this.execute('status --porcelain -uall');
         if (!statusOutput) {
             return [];
         }
@@ -91,10 +91,11 @@ export class Git {
             .filter(line => line.length > 0);    // remove empty lines
 
         return lines.map(line => {
-                // Trim spaces and split by whitespace
-                const charAndPath = line.trim().split(/\s+/);
-                const statusChar = charAndPath[0];
-                const filePath = charAndPath[1];
+                // Trim spaces, remove ("") as git might add them if file name has spaces, and split by whitespace
+                const trimmedLine = line.trim().replace(/"/g, "");
+                const firstSpaceIndex = trimmedLine.indexOf(' ');
+                const statusChar = trimmedLine.slice(0, firstSpaceIndex);
+                const filePath = trimmedLine.slice(firstSpaceIndex + 1).trim();
 
                 // We map staged/unstaged changes to simpler statuses. 'A' for new, 'D' for deleted, 'M' for everything else.
                 let status: 'A' | 'M' | 'D';
