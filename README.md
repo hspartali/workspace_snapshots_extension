@@ -18,11 +18,7 @@ Workspace Snapshots creates a private **"shadow" Git repository** for your proje
 
 -   ✅ **Effortless Checkpoints**: Instantly save the state of all your project files with a single click. The extension automatically detects changes, so you can't accidentally create an empty snapshot.
 
--   🧠 **Smart Diffs**: Diffs are always relevant. When you delete a snapshot, subsequent diffs automatically re-calculate against the new previous state, keeping your history clean and understandable.
-
--   ⚙️ **Toggleable Diff Modes**: Instantly switch between two diff modes using the toggle icon in the title bar:
-    -   `$(git-compare)` **Compare to Previous**: See what changed since the last snapshot.
-    -   `$(files)` **Compare to Workspace**: See how a snapshot version differs from your current live file.
+-   🧠 **Sequential Diffs**: See exactly what changed between snapshots. Diffs are always calculated against the previous version, giving you a clear, chronological view of your work. If you delete a snapshot, the history smartly adjusts.
 
 -   ⏪ **One-Click Restore**: Revert your entire workspace back to the state of any snapshot. Perfect for abandoning a failed experiment or returning to a known-good state.
 
@@ -30,14 +26,6 @@ Workspace Snapshots creates a private **"shadow" Git repository** for your proje
     -   **Rename**: Give snapshots meaningful names (e.g., "Before Big Refactor") to organize your workflow.
     -   **Delete**: Safely remove snapshots you no longer need. The history intelligently heals around them.
     -   **Clear All**: Wipe the entire snapshot history for a workspace with a single command, without affecting your current files.
-
----
-
-### ⚙️ Configuration
-
-The diff mode can be toggled directly from the icon in the view's title bar. This modifies the following setting in your `settings.json`:
-
--   `workspaceSnapshots.diffAgainstWorkspace` (boolean, default: `false`): Controls the diffing behavior. `false` compares against the previous snapshot, `true` compares against the current workspace file.
 
 ---
 

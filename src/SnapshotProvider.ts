@@ -380,20 +380,13 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
         let leftUri: vscode.Uri;
         let leftName: string;
 
-        const diffAgainstWorkspace = vscode.workspace.getConfiguration('workspaceSnapshots').get<boolean>('diffAgainstWorkspace');
-
-        if (diffAgainstWorkspace) {
-            leftUri = vscode.Uri.file(path.join(this.workspaceRoot, filePath));
-            leftName = 'Workspace';
-        } else {
-            const parentHash = this.findVisibleParentHash(commitHash);
-            leftUri = vscode.Uri.from({
-                scheme: 'workspace-snapshot',
-                path: `/${filePath}`,
-                query: `commit=${parentHash || 'none'}`
-            });
-            leftName = getSnapshotName(parentHash);
-        }
+        const parentHash = this.findVisibleParentHash(commitHash);
+        leftUri = vscode.Uri.from({
+            scheme: 'workspace-snapshot',
+            path: `/${filePath}`,
+            query: `commit=${parentHash || 'none'}`
+        });
+        leftName = getSnapshotName(parentHash);
 
         const title = `${path.basename(filePath)} (${leftName} ↔ ${rightName})`;
         

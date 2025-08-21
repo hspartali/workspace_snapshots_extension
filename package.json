@@ -57,16 +57,6 @@
         "icon": "$(go-to-file)"
       },
       {
-        "command": "workspace_snapshots.setDiffAgainstWorkspace",
-        "title": "Diff Against Workspace",
-        "icon": "$(files)"
-      },
-      {
-        "command": "workspace_snapshots.setDiffAgainstPrevious",
-        "title": "Diff Against Previous Snapshot",
-        "icon": "$(git-compare)"
-      },
-      {
         "command": "workspace_snapshots.addSeparator",
         "title": "Add Separator",
         "icon": "$(milestone)"
@@ -123,16 +113,6 @@
           "group": "navigation@1"
         },
         {
-          "command": "workspace_snapshots.setDiffAgainstWorkspace",
-          "when": "view == workspaceSnapshotsView && !config.workspaceSnapshots.diffAgainstWorkspace",
-          "group": "navigation@2"
-        },
-        {
-          "command": "workspace_snapshots.setDiffAgainstPrevious",
-          "when": "view == workspaceSnapshotsView && config.workspaceSnapshots.diffAgainstWorkspace",
-          "group": "navigation@2"
-        },
-        {
           "command": "workspace_snapshots.addSeparator",
           "when": "view == workspaceSnapshotsView",
           "group": "navigation@3"
@@ -185,16 +165,6 @@
           "group": "inline@1"
         }
       ]
-    },
-    "configuration": {
-      "title": "Workspace Snapshots",
-      "properties": {
-        "workspaceSnapshots.diffAgainstWorkspace": {
-          "type": "boolean",
-          "default": false,
-          "description": "When enabled, clicking a file in a snapshot will show a diff against the current file in your workspace, instead of the previous snapshot."
-        }
-      }
     }
   },
   "scripts": {
