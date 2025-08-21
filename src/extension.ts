@@ -219,6 +219,14 @@ export async function activate(context: vscode.ExtensionContext) {
         await snapshotProvider.discardAllChanges();
     }));
 
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.stageFileChange', async (item: WorkspaceFileChangeItem) => {
+        await snapshotProvider.stageFileChange(item);
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.stageAllChanges', async () => {
+        await snapshotProvider.stageAllChanges();
+    }));
+
     // Set up a file system watcher to refresh the 'Changes' view automatically.
     const watcher = vscode.workspace.createFileSystemWatcher('**/*');
     context.subscriptions.push(watcher);

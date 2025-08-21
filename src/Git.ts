@@ -61,10 +61,21 @@ export class Git {
         await this.execute('add -A .');
     }
 
+    public async stageFile(filePath: string): Promise<void> {
+        await this.execute(`add -- "${filePath.replace(/"/g, '\\"')}"`);
+    }
+
     public async commit(message: string): Promise<string> {
         // Use --no-verify to bypass any potential user-defined hooks in their global git config
         await this.execute(`commit --no-verify -m "${message.replace(/"/g, '\\"')}"`);
         // Return the hash of the new commit directly.
+        return this.execute('rev-parse HEAD');
+    }
+
+    public async amendCommit(): Promise<string> {
+        // Use --no-verify to bypass hooks and --no-edit to keep the previous commit message.
+        await this.execute(`commit --no-verify --amend --no-edit`);
+        // Return the hash of the new (amended) commit.
         return this.execute('rev-parse HEAD');
     }
 

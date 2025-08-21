@@ -247,6 +247,52 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
         }
     }
 
+    public async stageFileChange(item: WorkspaceFileChangeItem): Promise<void> {
+        const commits = await this.git.getCommits();
+        const userCommits = commits.filter(c => c.parentHash !== null && !this.deletedSnapshotIds.has(c.hash));
+        if (userCommits.length === 0) {
+            vscode.window.showWarningMessage("Cannot stage changes: Create a snapshot first.");
+            return;
+        }
+    
+        try {
+            await this.git.stageFile(item.filePath);
+            const originalCommit = userCommits[userCommits.length - 1];
+            const newHash = await this.git.amendCommit();
+            
+            this._updateLatestSnapshotAfterAmend(originalCommit.hash, newHash);
+            await this.refresh();
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Failed to stage file change: ${error.message}`);
+        }
+    }
+
+    public async stageAllChanges(): Promise<void> {
+        const commits = await this.git.getCommits();
+        const userCommits = commits.filter(c => c.parentHash !== null && !this.deletedSnapshotIds.has(c.hash));
+        if (userCommits.length === 0) {
+            vscode.window.showWarningMessage("Cannot stage changes: Create a snapshot first.");
+            return;
+        }
+    
+        const changes = await this.git.getStatus();
+        if (changes.length === 0) {
+            vscode.window.showInformationMessage("No changes to stage.");
+            return;
+        }
+    
+        try {
+            await this.git.stageAll();
+            const originalCommit = userCommits[userCommits.length - 1];
+            const newHash = await this.git.amendCommit();
+    
+            this._updateLatestSnapshotAfterAmend(originalCommit.hash, newHash);
+            await this.refresh();
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Failed to stage changes: ${error.message}`);
+        }
+    }
+
     // --- Tree Data Provider Implementation ---
 
     public async refresh(): Promise<void> {
@@ -420,6 +466,26 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
         const title = `${path.basename(filePath)} (${leftName} ↔ ${rightName})`;
         
         return { left: leftUri, right: rightUri, title };
+    }
+
+    private _updateLatestSnapshotAfterAmend(originalHash: string, newHash: string): void {
+        const customName = this.snapshotNames.get(originalHash);
+        if (customName) {
+            this.snapshotNames.delete(originalHash);
+            this.snapshotNames.set(newHash, customName);
+        }
+    
+        const separatorName = this.separatorNames.get(originalHash);
+        if (separatorName) {
+            this.separatorNames.delete(originalHash);
+            this.separatorNames.set(newHash, separatorName);
+        }
+    
+        if (this.restoredSnapshotId === originalHash) {
+            this.restoredSnapshotId = newHash;
+        }
+        
+        this.saveMetadata();
     }
 
     // --- Metadata Storage ---
