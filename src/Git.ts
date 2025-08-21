@@ -85,7 +85,6 @@ export class Git {
             return [];
         }
 
-        // The space " " in the following is for solving a trimmed file path in Changes Snapshot problem, don't remove it!
         const lines = statusOutput
             .split(/\r?\n/)                     // split by newlines handling both LF and CRLF line endings
             .filter(line => line.length > 0);    // remove empty lines

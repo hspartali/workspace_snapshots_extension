@@ -2,7 +2,7 @@
   "name": "workspace-snapshots",
   "displayName": "Workspace Snapshots",
   "description": "Checkpoint and diff uncommitted changes, safely outside your Git history.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "license": "MIT",
   "publisher": "hspartali",
   "icon": "icon.png",
