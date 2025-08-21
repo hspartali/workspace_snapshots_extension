@@ -155,9 +155,14 @@
           "group": "inline@2"
         },
         {
-          "command": "workspace_snapshots.discardFileChange",
+          "command": "workspace_snapshots.openFile",
           "when": "view == workspaceSnapshotsView && viewItem == 'workspaceFile'",
           "group": "inline@1"
+        },
+        {
+          "command": "workspace_snapshots.discardFileChange",
+          "when": "view == workspaceSnapshotsView && viewItem == 'workspaceFile'",
+          "group": "inline@2"
         },
         {
           "command": "workspace_snapshots.discardAllChanges",

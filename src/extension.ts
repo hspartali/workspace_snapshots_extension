@@ -151,7 +151,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     }));
 
-    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.openFile', async (file: SnapshotFile) => {
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.openFile', async (file: SnapshotFile | WorkspaceFileChangeItem) => {
         if (!snapshotProvider.workspaceRoot) {
             vscode.window.showErrorMessage("Could not determine workspace root.");
             return;
