@@ -18,12 +18,20 @@ Workspace Snapshots creates a private **"shadow" Git repository** for your proje
 
 -   ✅ **Effortless Checkpoints**: Instantly save the state of all your project files with a single click. The extension automatically detects changes, so you can't accidentally create an empty snapshot.
 
+-   ✏️ **Live Change Management**:
+    -   **View Changes**: Instantly see all uncommitted modifications in a dedicated "Changes" section.
+    -   **Diff Changes**: Quickly review your work by diffing any changed file against its state in the last snapshot.
+    -   **Discard Changes**: Safely revert modifications for a single file or for all files at once. Discarded files are moved to the trash.
+
+-   ➕ **Stage Changes into Snapshots**: Selectively add changes to your most recent snapshot without creating a new one. Stage individual files or all changes at once to keep your snapshot history clean and meaningful.
+
 -   🧠 **Sequential Diffs**: See exactly what changed between snapshots. Diffs are always calculated against the previous version, giving you a clear, chronological view of your work. If you delete a snapshot, the history smartly adjusts.
 
 -   ⏪ **One-Click Restore**: Revert your entire workspace back to the state of any snapshot. Perfect for abandoning a failed experiment or returning to a known-good state.
 
 -   🛠️ **Full History Management**:
     -   **Rename**: Give snapshots meaningful names (e.g., "Before Big Refactor") to organize your workflow.
+    -   **Separators**: Add named separators between snapshots to group related changes.
     -   **Delete**: Safely remove snapshots you no longer need. The history intelligently heals around them.
     -   **Clear All**: Wipe the entire snapshot history for a workspace with a single command, without affecting your current files.
 

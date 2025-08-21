@@ -1,0 +1,5 @@
+Run:
+
+`vsce package`
+
+to compile extension to '.vsix'
