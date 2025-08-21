@@ -95,6 +95,50 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
     }
 
     public async restoreSnapshot(hash: string): Promise<void> {
+        const headHash = await this.git.getHeadHash();
+        // The "from" state is the last snapshot we restored, or the latest snapshot if nothing has been restored yet.
+        const previousStateHash = this.restoredSnapshotId || headHash;
+
+        // If we are not actually changing state, do nothing.
+        if (hash === previousStateHash) {
+            // Even if the hashes are the same, the user might have changes, so we offer to restore.
+            const confirm = await vscode.window.showWarningMessage(
+                'This snapshot is already active. Do you want to discard any uncommitted changes and revert to this snapshot?',
+                { modal: true },
+                'Discard Changes and Restore'
+            );
+            if (confirm !== 'Discard Changes and Restore') {
+                return;
+            }
+        }
+
+        // --- Robust File Cleanup ---
+        // Get a manifest of all files in the old state and the new state.
+        const previousFiles = await this.git.getTrackedFiles(previousStateHash);
+        const targetFiles = await this.git.getTrackedFiles(hash);
+
+        const previousFileSet = new Set(previousFiles);
+        const targetFileSet = new Set(targetFiles);
+
+        // Find files that exist in the old state but not in the new one.
+        for (const fileToDelete of previousFileSet) {
+            if (!targetFileSet.has(fileToDelete)) {
+                const fileUri = vscode.Uri.file(path.join(this.workspaceRoot, fileToDelete));
+                try {
+                    // This file needs to be deleted from the workspace.
+                    await vscode.workspace.fs.delete(fileUri, { useTrash: true });
+                } catch (error: any) {
+                    if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
+                        // The file was already deleted from the workspace, which is fine.
+                    } else {
+                        vscode.window.showWarningMessage(`Could not remove old file during restore: ${fileToDelete}.`);
+                        console.warn(`Failed to delete file ${fileToDelete} during restore:`, error);
+                    }
+                }
+            }
+        }
+
+        // After cleanup, restore the files from the target snapshot.
         await this.git.restore(hash);
         this.restoredSnapshotId = hash;
         this.saveMetadata();

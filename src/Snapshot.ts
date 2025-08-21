@@ -31,7 +31,7 @@ export class Snapshot extends vscode.TreeItem {
 
 export class SnapshotFile extends vscode.TreeItem {
     public readonly filePath: string;
-    public readonly status: 'A' | 'M' | 'D' | 'R' | 'C';
+    public readonly status: 'A' | 'M' | 'D';
 
     constructor(
         fileChange: FileChange,
@@ -90,7 +90,7 @@ export class ChangesItem extends vscode.TreeItem {
 
 export class WorkspaceFileChangeItem extends vscode.TreeItem {
     public readonly filePath: string;
-    public readonly status: 'A' | 'M' | 'D' | 'R' | 'C';
+    public readonly status: 'A' | 'M' | 'D';
 
     constructor(
         fileChange: FileChange,

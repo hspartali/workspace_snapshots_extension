@@ -13,7 +13,7 @@ export interface Commit {
 
 export interface FileChange {
     path: string;
-    status: 'A' | 'M' | 'D' | 'R' | 'C';
+    status: 'A' | 'M' | 'D';
 }
 
 export class Git {
@@ -137,13 +137,26 @@ export class Git {
             return [];
         }
 
-        return diffOutput.split('\n')
-            .filter(line => line.trim()) // Filter out potential empty lines
-            .map(line => {
-                const [status, filePath] = line.split('\t');
-                // Use the full FileChange status type to correctly handle renames, etc.
-                return { status: status.charAt(0) as FileChange['status'], path: filePath };
-            });
+        const changes: FileChange[] = [];
+        const lines = diffOutput.split('\n').filter(line => line.trim());
+
+        for (const line of lines) {
+            const parts = line.split('\t');
+            const statusChar = parts[0].charAt(0);
+
+            if (statusChar === 'R' || statusChar === 'C') {
+                // Treat rename/copy as delete of old path + add of new path
+                changes.push({ status: 'D', path: parts[1] });
+                changes.push({ status: 'A', path: parts[2] });
+            } else if (statusChar === 'A') {
+                changes.push({ status: 'A', path: parts[1] });
+            } else if (statusChar === 'D') {
+                changes.push({ status: 'D', path: parts[1] });
+            } else { // M (Modified), T (Type change), etc. are all treated as Modified
+                changes.push({ status: 'M', path: parts[1] });
+            }
+        }
+        return changes;
     }
     
     public async show(hash: string, filePath: string): Promise<string> {
@@ -159,6 +172,15 @@ export class Git {
         // This command is the key to non-destructive restores.
         // It updates the working directory to match the commit, but DOES NOT move HEAD.
         await this.execute(`restore --source=${hash} --worktree -- .`);
+    }
+
+    public async getTrackedFiles(hash: string): Promise<string[]> {
+        // ls-tree is a reliable, low-level way to get a flat list of all files in a commit.
+        const output = await this.execute(`ls-tree -r --name-only ${hash}`);
+        if (!output) {
+            return [];
+        }
+        return output.split(/\r?\n/).filter(line => line.length > 0);
     }
 
     public async discard(filePath: string): Promise<void> {
