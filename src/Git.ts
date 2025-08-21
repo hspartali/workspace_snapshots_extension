@@ -74,9 +74,11 @@ export class Git {
             return [];
         }
 
-        return statusOutput.split('\n')
-            .filter(line => line.trim())
-            .map(line => {
+        const lines = (" " + statusOutput)
+            .split(/\r?\n/)                     // split by newlines handling both LF and CRLF line endings
+            .filter(line => line.length > 0);    // remove empty lines
+
+        return lines.map(line => {
                 const statusChar = line.substring(0, 2).trim();
                 const filePath = line.substring(3);
                 // We map staged/unstaged changes to simpler statuses. 'A' for new, 'D' for deleted, 'M' for everything else.
