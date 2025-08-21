@@ -74,7 +74,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         if (confirm === 'Delete') {
-            snapshotProvider.deleteSnapshot(snapshot.id!);
+            await snapshotProvider.deleteSnapshot(snapshot.id!);
             await snapshotProvider.refresh();
         }
     }));

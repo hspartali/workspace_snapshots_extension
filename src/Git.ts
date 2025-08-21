@@ -74,13 +74,17 @@ export class Git {
             return [];
         }
 
-        const lines = (" " + statusOutput)
+        // The space " " in the following is for solving a trimmed file path in Changes Snapshot problem, don't remove it!
+        const lines = statusOutput
             .split(/\r?\n/)                     // split by newlines handling both LF and CRLF line endings
             .filter(line => line.length > 0);    // remove empty lines
 
         return lines.map(line => {
-                const statusChar = line.substring(0, 2).trim();
-                const filePath = line.substring(3);
+                // Trim spaces and split by whitespace
+                const charAndPath = line.trim().split(/\s+/);
+                const statusChar = charAndPath[0];
+                const filePath = charAndPath[1];
+
                 // We map staged/unstaged changes to simpler statuses. 'A' for new, 'D' for deleted, 'M' for everything else.
                 let status: 'A' | 'M' | 'D';
                 if (statusChar.startsWith('A') || statusChar === '??') {
@@ -156,4 +160,14 @@ export class Git {
         await this.execute(`restore .`);
     }
 
+    public async resetHead(hash: string): Promise<void> {
+        // --soft moves HEAD but doesn't touch the index file or the working tree, which is exactly what we need.
+        // The user's changes in the working directory are preserved and will be compared against the new HEAD.
+        await this.execute(`reset --soft ${hash}`);
+    }
+
+    public async getHeadHash(): Promise<string> {
+        // We just need the hash of what HEAD points to.
+        return this.execute('rev-parse HEAD');
+    }
 }

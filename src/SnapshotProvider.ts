@@ -105,12 +105,37 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
         this.saveMetadata();
     }
 
-    public deleteSnapshot(commitHash: string): void {
+    public async deleteSnapshot(commitHash: string): Promise<void> {
+        const commits = await this.git.getCommits();
+        const userCommits = commits.filter(c => c.parentHash !== null);
+
+        const isDeletingLatest = userCommits.length > 0 && userCommits[userCommits.length - 1].hash === commitHash;
+
         this.deletedSnapshotIds.add(commitHash);
+
+        if (isDeletingLatest) {
+            // Find the new HEAD by filtering out all deleted commits
+            const visibleCommits = userCommits.filter(c => !this.deletedSnapshotIds.has(c.hash));
+            
+            let newHeadHash: string | undefined;
+            if (visibleCommits.length > 0) {
+                newHeadHash = visibleCommits[visibleCommits.length - 1].hash;
+            } else {
+                // All user commits have been deleted, reset to the initial commit.
+                const initialCommit = commits.find(c => c.parentHash === null);
+                newHeadHash = initialCommit?.hash;
+            }
+
+            if (newHeadHash) {
+                await this.git.resetHead(newHeadHash);
+            }
+        }
+
         // If the deleted snapshot was the restored one, clear the restored state.
         if (this.restoredSnapshotId === commitHash) {
             this.restoredSnapshotId = null;
         }
+
         this.saveMetadata();
     }
 
@@ -311,10 +336,14 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
         const latestCommitHash = userCommits[userCommits.length - 1].hash;
         const filePath = item.filePath;
 
+        // For newly added files, the left side of the diff doesn't exist in the last snapshot.
+        // We create a special URI that the content provider will resolve to an empty string.
+        const leftCommitHash = item.status === 'A' ? 'none' : latestCommitHash;
+
         const leftUri = vscode.Uri.from({
             scheme: 'workspace-snapshot',
             path: `/${filePath}`,
-            query: `commit=${latestCommitHash}`
+            query: `commit=${leftCommitHash}`
         });
 
         // The right URI is the actual editable file in the workspace
