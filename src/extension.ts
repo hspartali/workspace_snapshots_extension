@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { SnapshotProvider } from './SnapshotProvider';
-import { Snapshot, SnapshotFile, SeparatorItem, WorkspaceFileChangeItem } from './Snapshot';
+import { Snapshot, SnapshotFile, SeparatorItem, WorkspaceFileChangeItem, ChangesItem } from './Snapshot';
 import { ReadonlyContentProvider } from './ReadonlyContentProvider';
 import { SnapshotFileDecorationProvider } from './SnapshotFileDecorationProvider';
 
@@ -259,6 +259,15 @@ export async function activate(context: vscode.ExtensionContext) {
             snapshotProvider.deleteSeparator(separator.snapshotId);
             await snapshotProvider.refresh();
         }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.discardFileChange', async (item: WorkspaceFileChangeItem) => {
+        await snapshotProvider.discardFileChange(item);
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('workspace_snapshots.discardAllChanges', async (item: ChangesItem) => {
+        // The 'item' is the ChangesItem from the tree, but the logic doesn't need it.
+        await snapshotProvider.discardAllChanges();
     }));
 
     // Set up a file system watcher to refresh the 'Changes' view automatically.

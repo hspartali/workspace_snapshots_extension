@@ -146,4 +146,14 @@ export class Git {
         await this.execute(`restore --source=${hash} --worktree -- .`);
     }
 
+    public async discard(filePath: string): Promise<void> {
+        // Discard changes in the working tree for a specific file.
+        await this.execute(`restore -- "${filePath.replace(/"/g, '\\"')}"`);
+    }
+
+    public async discardAll(): Promise<void> {
+        // Discard all changes in the working tree for tracked files.
+        await this.execute(`restore .`);
+    }
+
 }

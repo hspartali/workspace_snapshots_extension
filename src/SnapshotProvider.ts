@@ -149,6 +149,79 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
         await this.initialize();
     }
 
+    public async discardFileChange(item: WorkspaceFileChangeItem): Promise<void> {
+        const filePath = path.join(this.workspaceRoot, item.filePath);
+        const fileUri = vscode.Uri.file(filePath);
+        const fileName = path.basename(item.filePath);
+
+        const confirm = await vscode.window.showWarningMessage(
+            `Are you sure you want to discard changes to '${fileName}'? This cannot be undone.`,
+            { modal: true },
+            'Discard'
+        );
+
+        if (confirm !== 'Discard') {
+            return;
+        }
+
+        if (item.status === 'A') {
+            // For newly added files, move to trash.
+            try {
+                await vscode.workspace.fs.delete(fileUri, { useTrash: true });
+            } catch (error: any) {
+                vscode.window.showErrorMessage(`Failed to discard new file ${item.filePath}: ${error.message}`);
+            }
+        } else {
+            // For modified or deleted files, use git to restore them.
+            try {
+                await this.git.discard(item.filePath);
+            } catch (error: any) {
+                vscode.window.showErrorMessage(`Failed to discard changes for ${item.filePath}: ${error.message}`);
+            }
+        }
+        await this.refresh();
+    }
+
+    public async discardAllChanges(): Promise<void> {
+        const changes = await this.git.getStatus();
+        if (changes.length === 0) {
+            vscode.window.showInformationMessage("No changes to discard.");
+            return;
+        }
+
+        const confirm = await vscode.window.showWarningMessage(
+            `Are you sure you want to discard all ${changes.length} uncommitted changes? This cannot be undone.`,
+            { modal: true },
+            'Discard All'
+        );
+
+        if (confirm !== 'Discard All') {
+            return;
+        }
+
+        try {
+            const untrackedFiles = changes.filter(c => c.status === 'A');
+            const trackedChanges = changes.filter(c => c.status !== 'A');
+
+            // Delete untracked files by moving them to the trash.
+            for (const file of untrackedFiles) {
+                const fileUri = vscode.Uri.file(path.join(this.workspaceRoot, file.path));
+                await vscode.workspace.fs.delete(fileUri, { useTrash: true });
+            }
+            
+            // Discard all other changes (Modified, Deleted) using Git.
+            if (trackedChanges.length > 0) {
+                await this.git.discardAll();
+            }
+
+            await this.refresh();
+            vscode.window.showInformationMessage('All changes have been discarded.');
+
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Failed to discard changes: ${error.message}`);
+        }
+    }
+
     // --- Tree Data Provider Implementation ---
 
     public async refresh(): Promise<void> {
