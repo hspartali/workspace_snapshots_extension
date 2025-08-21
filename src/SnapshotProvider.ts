@@ -21,6 +21,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
     private deletedSnapshotIds: Set<string> = new Set();
     private _commitCache: Map<string, Commit> = new Map();
     private treeView?: vscode.TreeView<TreeItem>;
+    private snapshotToExpand: string | null = null;
 
     constructor(private context: vscode.ExtensionContext) {}
 
@@ -305,6 +306,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
             const newHash = await this.git.amendCommit();
             
             this._updateLatestSnapshotAfterAmend(originalCommit.hash, newHash);
+            this.snapshotToExpand = newHash;
             await this.refresh();
         } catch (error: any) {
             vscode.window.showErrorMessage(`Failed to stage file change: ${error.message}`);
@@ -331,6 +333,7 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
             const newHash = await this.git.amendCommit();
     
             this._updateLatestSnapshotAfterAmend(originalCommit.hash, newHash);
+            this.snapshotToExpand = newHash;
             await this.refresh();
         } catch (error: any) {
             vscode.window.showErrorMessage(`Failed to stage changes: ${error.message}`);
@@ -397,7 +400,14 @@ export class SnapshotProvider implements vscode.TreeDataProvider<TreeItem> {
                     const customName = this.snapshotNames.get(commit.hash);
                     const isRestored = commit.hash === this.restoredSnapshotId;
                     const isNew = userCommits.length > 0 && index === userCommits.length - 1;
-                    results.push(new Snapshot(commit, customName, isRestored, isNew));
+
+                    let collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+                    if (this.snapshotToExpand === commit.hash) {
+                        collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                        this.snapshotToExpand = null; // Reset after use
+                    }
+
+                    results.push(new Snapshot(commit, customName, isRestored, isNew, collapsibleState));
                     return results;
                 });
 

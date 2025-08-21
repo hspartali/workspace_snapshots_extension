@@ -7,10 +7,11 @@ export class Snapshot extends vscode.TreeItem {
         public readonly commit: Commit,
         public readonly customName?: string,
         public readonly isRestored: boolean = false,
-        public readonly isNew: boolean = false
+        public readonly isNew: boolean = false,
+        collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.Collapsed
     ) {
         // Use customName if provided, otherwise fall back to commit message
-        super(customName || commit.message, vscode.TreeItemCollapsibleState.Collapsed);
+        super(customName || commit.message, collapsibleState);
         this.id = commit.hash;
         // Keep original message in tooltip for reference
         this.tooltip = `Message: ${commit.message}\nAuthor: ${commit.author}\nHash: ${commit.hash}`;
